@@ -1,0 +1,307 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Metamorph Metals{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col">
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
+              x-data="{ 
+                  customizing: false, 
+                  widgets: { 
+                      powder_alerts: true, 
+                      stock_levels: true, 
+                      gas: true, 
+                      electricity: true, 
+                      qc: true, 
+                      prod_efficiency: false, 
+                      scrap_rate: false, 
+                      recent_powders: true, 
+                      urgent_tasks: true 
+                  }, 
+                  timePeriod: 'Last 24 Hours',
+                  dashboardData: {},
+                  loading: true
+              }"
+              x-init="
+                  fetch('/api/dashboard/')
+                      .then(response => response.json())
+                      .then(data => {
+                          dashboardData = data;
+                          loading = false;
+                      })
+                      .catch(error => {
+                          console.error('Error fetching dashboard data:', error);
+                          loading = false;
+                      });
+              ">
+            
+            <div class="mx-auto max-w-7xl">
+                <!-- Loading State -->
+                <template x-if="loading">
+                    <div class="flex justify-center items-center py-12">
+                        <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                    </div>
+                </template>
+
+                <!-- Dashboard Content -->
+                <template x-if="!loading">
+                    <div>
+                        <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                            <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Executive Overview</h2>
+                            <div class="flex items-center gap-2">
+                                <div class="flex items-center gap-1 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-1">
+                                    <button :class="{'bg-primary text-black': timePeriod === 'Last 24 Hours', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last 24 Hours'}" 
+                                            @click="timePeriod = 'Last 24 Hours'" 
+                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">24h</button>
+                                    <button :class="{'bg-primary text-black': timePeriod === 'Last Week', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Week'}" 
+                                            @click="timePeriod = 'Last Week'" 
+                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">7d</button>
+                                    <button :class="{'bg-primary text-black': timePeriod === 'Last Month', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Month'}" 
+                                            @click="timePeriod = 'Last Month'" 
+                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">30d</button>
+                                </div>
+                                <button @click="customizing = !customizing" 
+                                        class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
+                                    <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">edit</span>
+                                    <span x-text="customizing ? 'Done' : 'Customize'"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Customize Widgets Panel -->
+                        <div class="mb-6 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5" 
+                             x-cloak 
+                             x-show="customizing">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Customize Widgets</h3>
+                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
+                                           type="checkbox" 
+                                           x-model="widgets.powder_alerts"/>
+                                    <span class="text-gray-800 dark:text-gray-200">Powder Stock Alerts</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
+                                           type="checkbox" 
+                                           x-model="widgets.stock_levels"/>
+                                    <span class="text-gray-800 dark:text-gray-200">Overall Stock Levels</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
+                                           type="checkbox" 
+                                           x-model="widgets.gas"/>
+                                    <span class="text-gray-800 dark:text-gray-200">Gas Consumption</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
+                                           type="checkbox" 
+                                           x-model="widgets.electricity"/>
+                                    <span class="text-gray-800 dark:text-gray-200">Electricity Usage</span>
+                                </label>
+                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
+                                           type="checkbox" 
+                                           x-model="widgets.qc"/>
+                                    <span class="text-gray-800 dark:text-gray-200">QC Pass Rate</span>
+                                </label>
+                            </div>
+                        </div>
+
+                        <!-- Widget Grid -->
+                        <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+                            <!-- Powder Stock Alert -->
+                            <template x-if="widgets.powder_alerts">
+                                <a href="{% url 'inventory' %}" 
+                                   class="group flex flex-col gap-4 rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5 transition-all duration-200 hover:border-red-500 dark:hover:border-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/20">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-red-600 dark:text-red-300">Powder Stock Alert</p>
+                                            <p class="text-2xl font-bold text-red-700 dark:text-red-200">Critical Low</p>
+                                        </div>
+                                        <span class="material-symbols-outlined text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors duration-200">warning</span>
+                                    </div>
+                                    <div class="flex items-baseline gap-2">
+                                        <p class="text-sm text-red-600 dark:text-red-300">2 powders below threshold</p>
+                                    </div>
+                                </a>
+                            </template>
+
+                            <!-- Overall Stock Levels -->
+                            <template x-if="widgets.stock_levels">
+                                <a href="{% url 'inventory' %}" 
+                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall Stock Levels</p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.powder_stock + ' kg'"></p>
+                                        </div>
+                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">inventory_2</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-green-500 text-sm font-bold">+3%</span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                    </div>
+                                </a>
+                            </template>
+
+                            <!-- QC Pass Rate -->
+                            <template x-if="widgets.qc">
+                                <a href="{% url 'qc' %}" 
+                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">QC Pass Rate</p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.qc_reports + '%'"></p>
+                                        </div>
+                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">verified</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-green-500 text-sm font-bold">+3%</span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                    </div>
+                                </a>
+                            </template>
+
+                            <!-- Job Works -->
+                            <template x-if="widgets.prod_efficiency">
+                                <a href="{% url 'production' %}" 
+                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                    <div class="flex justify-between items-start">
+                                        <div>
+                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Job Works</p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.job_works"></p>
+                                        </div>
+                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">precision_manufacturing</span>
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-green-500 text-sm font-bold">+1.5%</span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                    </div>
+                                </a>
+                            </template>
+                        </div>
+
+                        <!-- Utility Charts -->
+                        <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
+                            <!-- Gas Consumption -->
+                            <template x-if="widgets.gas">
+                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <h3 class="font-bold text-gray-900 dark:text-white">Gas Consumption</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod"></p>
+                                        </div>
+                                        <div class="flex items-center gap-1 text-green-500">
+                                            <span class="font-bold">+2%</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-1 items-end gap-6 mt-4">
+                                        <div class="w-1/2">
+                                            <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.gas + ' m³'"></p>
+                                        </div>
+                                        <div class="flex-1 spark-chart-positive-light dark:spark-chart-positive-dark h-16">
+                                            <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667V100H0V72.6667Z" fill="url(#paint0_linear_spark_positive)"></path>
+                                                <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                                                <defs>
+                                                    <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_positive" x1="236" x2="236" y1="0.666667" y2="100">
+                                                        <stop stop-color="var(--start-color)"></stop>
+                                                        <stop offset="1" stop-color="var(--end-color)"></stop>
+                                                    </linearGradient>
+                                                </defs>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Electricity Usage -->
+                            <template x-if="widgets.electricity">
+                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                                    <div class="flex items-start justify-between">
+                                        <div>
+                                            <h3 class="font-bold text-gray-900 dark:text-white">Electricity Usage</h3>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod"></p>
+                                        </div>
+                                        <div class="flex items-center gap-1 text-red-500">
+                                            <span class="font-bold">-1%</span>
+                                        </div>
+                                    </div>
+                                    <div class="flex flex-1 items-end gap-6 mt-4">
+                                        <div class="w-1/2">
+                                            <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.electricity + ' kWh'"></p>
+                                        </div>
+                                        <div class="flex-1 spark-chart-negative-light dark:spark-chart-negative-dark h-16">
+                                            <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                                                <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333V100H0V37.3333Z" fill="url(#paint0_linear_spark_negative)"></path>
+                                                <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                                                <defs>
+                                                    <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_negative" x1="236" x2="236" y1="-49.3333" y2="100">
+                                                        <stop stop-color="var(--start-color)"></stop>
+                                                        <stop offset="1" stop-color="var(--end-color)"></stop>
+                                                    </linearGradient>
+                                                </defs>
+                                            </svg>
+                                        </div>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+
+                        <!-- Recent Powders & Urgent Tasks -->
+                        <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
+                            <!-- Recent Powders -->
+                            <template x-if="widgets.recent_powders">
+                                <div class="lg:col-span-2 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Recent Powders Used & Stock</h3>
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Overview of recently used powders and their current stock levels.</p>
+                                    <div class="flex-1 mt-6 flow-root">
+                                        <ul class="-my-4 divide-y divide-gray-200/10 dark:divide-gray-700/50">
+                                            <li class="flex items-center py-4 space-x-4">
+                                                <div class="flex-shrink-0 size-10 rounded-lg bg-gray-200/10 dark:bg-gray-700/50 flex items-center justify-center">
+                                                    <span class="material-symbols-outlined text-primary">grain</span>
+                                                </div>
+                                                <div class="flex-1 min-w-0">
+                                                    <p class="text-sm font-bold text-gray-900 dark:text-white truncate">Matte Black TGIC</p>
+                                                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate">P-10245</p>
+                                                </div>
+                                                <div class="text-right">
+                                                    <p class="text-sm font-bold text-gray-900 dark:text-white">52 kg</p>
+                                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">In Stock</span>
+                                                </div>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </template>
+
+                            <!-- Urgent Tasks -->
+                            <template x-if="widgets.urgent_tasks">
+                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                                    <div class="flex items-center justify-between">
+                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Urgent Production Tasks</h3>
+                                        <a class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors" href="{% url 'production' %}">
+                                            <span>View Full Schedule</span>
+                                            <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+                                        </a>
+                                    </div>
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Pressing items needing attention.</p>
+                                    <div class="mt-6 flow-root">
+                                        <ul class="-my-4 divide-y divide-gray-200/10 dark:divide-gray-700/50">
+                                            <li class="py-4">
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white">Line 2: Oven temperature calibration overdue.</p>
+                                            </li>
+                                        </ul>
+                                    </div>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+                </template>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

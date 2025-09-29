@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Register - Metamorph Metals{% endblock %}
+
+{% block extra_head %}
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<script>
+    tailwind.config = {
+      darkMode: "class",
+      theme: {
+        extend: {
+          colors: {
+            "primary": "#38e07b",
+            "background-light": "#f6f8f7",
+            "background-dark": "#122017",
+          },
+          fontFamily: {
+            "display": ["Space Grotesk", "sans-serif"]
+          },
+          borderRadius: {
+            "DEFAULT": "0.25rem",
+            "lg": "0.5rem",
+            "xl": "0.75rem",
+            "full": "9999px"
+          },
+        },
+      },
+    }
+</script>
+<style>
+    body {
+        font-family: 'Space Grotesk', sans-serif;
+    }
+    .dark {
+        background-color: #122017;
+    }
+    .light {
+        background-color: #f6f8f7;
+    }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="flex items-center justify-center min-h-screen light dark:dark">
+    <div class="w-full max-w-md p-8 space-y-8 bg-background-light dark:bg-background-dark rounded-xl">
+        <div class="text-center">
+            <div class="flex justify-center mb-4">
+                <svg class="h-8 w-8 text-primary" fill="none" viewBox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+                    <path d="M6 6H42L36 24L42 42H6L12 24L6 6Z" fill="currentColor"></path>
+                </svg>
+            </div>
+            <h1 class="text-3xl font-bold text-gray-900 dark:text-white">
+                Create Account
+            </h1>
+            <p class="mt-2 text-sm text-gray-600 dark:text-gray-400">
+                Join Metamorph Metals to start managing operations.
+            </p>
+        </div>
+
+        <form method="POST" action="{% url 'register' %}" class="mt-8 space-y-6">
+            {% csrf_token %}
+            
+            {% if messages %}
+                {% for message in messages %}
+                <div class="p-3 bg-red-500/20 border border-red-500/30 rounded-lg text-red-300 text-sm text-center">
+                    {{ message }}
+                </div>
+                {% endfor %}
+            {% endif %}
+
+            <div class="rounded-md shadow-sm space-y-4">
+                <div>
+                    <label class="sr-only" for="regUsername">Username</label>
+                    <input autocomplete="username" 
+                           class="appearance-none rounded-lg relative block w-full px-3 py-4 border border-gray-300 dark:border-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-background-light dark:bg-background-dark focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm" 
+                           id="regUsername" 
+                           name="username" 
+                           placeholder="Username" 
+                           required="" 
+                           type="text"/>
+                </div>
+                <div>
+                    <label class="sr-only" for="regEmail">Email</label>
+                    <input autocomplete="email" 
+                           class="appearance-none rounded-lg relative block w-full px-3 py-4 border border-gray-300 dark:border-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-background-light dark:bg-background-dark focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm" 
+                           id="regEmail" 
+                           name="email" 
+                           placeholder="Email" 
+                           required="" 
+                           type="email"/>
+                </div>
+                <div>
+                    <label class="sr-only" for="regPassword">Password</label>
+                    <input autocomplete="new-password" 
+                           class="appearance-none rounded-lg relative block w-full px-3 py-4 border border-gray-300 dark:border-gray-700 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-background-light dark:bg-background-dark focus:outline-none focus:ring-primary focus:border-primary focus:z-10 sm:text-sm" 
+                           id="regPassword" 
+                           name="password" 
+                           placeholder="Password" 
+                           required="" 
+                           type="password"/>
+                </div>
+            </div>
+
+            <div>
+                <button class="group relative w-full flex justify-center py-3 px-4 border border-transparent text-sm font-bold rounded-lg text-black bg-primary hover:bg-primary/90 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-primary" 
+                        type="submit">
+                    Create Account
+                </button>
+            </div>
+        </form>
+
+        <p class="mt-6 text-center text-sm text-gray-600 dark:text-gray-400">
+            Already have an account?
+            <a class="font-medium text-primary hover:text-primary/80" href="{% url 'login' %}">
+                Sign In
+            </a>
+        </p>
+    </div>
+</div>
+{% endblock %}

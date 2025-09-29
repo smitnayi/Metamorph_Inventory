@@ -1,0 +1,251 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}Metamorph Metals{% endblock %}</title>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
+    <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+    <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+    <script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        primary: "#38e07b",
+                        "background-light": "#f6f8f7",
+                        "background-dark": "#122017",
+                    },
+                    fontFamily: {
+                        display: ["Space Grotesk", "sans-serif"],
+                    },
+                    borderRadius: {
+                        DEFAULT: "0.25rem",
+                        lg: "0.5rem",
+                        xl: "0.75rem",
+                        full: "9999px",
+                    },
+                },
+            },
+        };
+    </script>
+    <style>
+        .spark-chart-positive-dark {
+            --start-color: #38e07b33;
+            --end-color: #38e07b00;
+            --stroke-color: #38e07b;
+        }
+        .spark-chart-positive-light {
+            --start-color: #38e07b33;
+            --end-color: #38e07b00;
+            --stroke-color: #38e07b;
+        }
+        .spark-chart-negative-dark {
+            --start-color: #ef444433;
+            --end-color: #ef444400;
+            --stroke-color: #ef4444;
+        }
+        .spark-chart-negative-light {
+            --start-color: #ef444433;
+            --end-color: #ef444400;
+            --stroke-color: #ef4444;
+        }
+        [x-cloak] {
+            display: none !important;
+        }
+        
+        /* Navigation styles without @apply */
+        .nav-link {
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            border-radius: 0.375rem;
+            font-size: 0.875rem;
+            font-weight: 500;
+            color: #374151;
+            transition: color 0.2s;
+        }
+        
+        .dark .nav-link {
+            color: #d1d5db;
+        }
+        
+        .nav-link:hover {
+            color: #38e07b;
+        }
+        
+        .dark .nav-link:hover {
+            color: #38e07b;
+        }
+        
+        .nav-link.active {
+            color: #38e07b;
+            background-color: rgba(56, 224, 123, 0.1);
+        }
+        
+        .mobile-nav-link {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding-top: 0.5rem;
+            padding-bottom: 0.5rem;
+            padding-left: 0.75rem;
+            padding-right: 0.75rem;
+            border-radius: 0.375rem;
+            color: #374151;
+            transition: color 0.2s;
+        }
+        
+        .dark .mobile-nav-link {
+            color: #d1d5db;
+        }
+        
+        .mobile-nav-link:hover {
+            color: #38e07b;
+        }
+        
+        .dark .mobile-nav-link:hover {
+            color: #38e07b;
+        }
+        
+        .mobile-nav-link.active {
+            color: #38e07b;
+            background-color: rgba(56, 224, 123, 0.1);
+        }
+        
+        .fade-in {
+            animation: fadeIn 0.3s ease-in-out;
+        }
+        
+        @keyframes fadeIn {
+            from { opacity: 0; }
+            to { opacity: 1; }
+        }
+    </style>
+    <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
+    {% block extra_head %}{% endblock %}
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <!-- Navigation Header -->
+    <header class="sticky top-0 z-50 w-full border-b border-gray-200/20 dark:border-gray-700/60 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md">
+        <div class="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
+            <div class="flex h-16 items-center justify-between">
+                <!-- Logo -->
+                <div class="flex items-center">
+                    <div class="flex-shrink-0">
+                        <a href="{% url 'dashboard' %}" class="text-xl font-bold text-gray-900 dark:text-white">Metamorph Metals</a>
+                    </div>
+                    <!-- Navigation -->
+                    <nav class="hidden md:ml-8 md:flex md:space-x-6">
+                        <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
+                        <a href="{% url 'inventory' %}" class="nav-link {% if request.resolver_match.url_name == 'inventory' %}active{% endif %}">Inventory</a>
+                        <a href="{% url 'production' %}" class="nav-link {% if request.resolver_match.url_name == 'production' %}active{% endif %}">Production</a>
+                        <a href="{% url 'qc' %}" class="nav-link {% if request.resolver_match.url_name == 'qc' %}active{% endif %}">QC</a>
+                        <a href="{% url 'utilities' %}" class="nav-link {% if request.resolver_match.url_name == 'utilities' %}active{% endif %}">Utilities</a>
+                    </nav>
+                </div>
+                
+                <!-- User Menu -->
+<div class="flex items-center space-x-4">
+    <!-- Theme Toggle -->
+    <button id="theme-toggle" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+        <span class="material-symbols-outlined dark:hidden">dark_mode</span>
+        <span class="material-symbols-outlined hidden dark:inline">light_mode</span>
+    </button>
+    
+    <!-- User Profile -->
+    <div class="relative" x-data="{ open: false }">
+        <button @click="open = !open" class="flex items-center space-x-2 rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+            <span class="material-symbols-outlined">account_circle</span>
+            <span class="hidden md:inline">{{ user.username }}</span>
+            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary">
+                {{ user.userprofile.get_role_display }}
+            </span>
+        </button>
+        
+        <!-- Dropdown Menu -->
+        <div x-show="open" @click.away="open = false" 
+             class="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white dark:bg-gray-800 shadow-lg py-1 z-50"
+             x-cloak>
+            <div class="px-4 py-2 border-b border-gray-200/20 dark:border-gray-700/60">
+                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ user.get_full_name|default:user.username }}</p>
+                <p class="text-xs text-gray-500 dark:text-gray-400">{{ user.userprofile.get_role_display }}</p>
+            </div>
+            <a href="{% url 'profile' %}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                Profile Settings
+            </a>
+            <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                Logout
+            </a>
+        </div>
+    </div>
+</div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Mobile Navigation -->
+    <div class="md:hidden border-b border-gray-200/20 dark:border-gray-700/60 bg-white/80 dark:bg-background-dark/80 backdrop-blur-md">
+        <div class="flex justify-around py-2">
+            <a href="{% url 'dashboard' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <span class="material-symbols-outlined">dashboard</span>
+                <span class="text-xs mt-1">Dashboard</span>
+            </a>
+            <a href="{% url 'inventory' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'inventory' %}active{% endif %}">
+                <span class="material-symbols-outlined">inventory_2</span>
+                <span class="text-xs mt-1">Inventory</span>
+            </a>
+            <a href="{% url 'production' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'production' %}active{% endif %}">
+                <span class="material-symbols-outlined">precision_manufacturing</span>
+                <span class="text-xs mt-1">Production</span>
+            </a>
+            <a href="{% url 'qc' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'qc' %}active{% endif %}">
+                <span class="material-symbols-outlined">verified</span>
+                <span class="text-xs mt-1">QC</span>
+            </a>
+            <a href="{% url 'utilities' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'utilities' %}active{% endif %}">
+                <span class="material-symbols-outlined">bolt</span>
+                <span class="text-xs mt-1">Utilities</span>
+            </a>
+        </div>
+    </div>
+
+    <!-- Main Content Area -->
+    <main class="flex-1 overflow-y-auto p-6 lg:p-8">
+        {% block content %}{% endblock %}
+    </main>
+
+    <script>
+        // Theme toggle functionality
+        document.addEventListener('DOMContentLoaded', function() {
+            const themeToggle = document.getElementById('theme-toggle');
+            if (themeToggle) {
+                themeToggle.addEventListener('click', function() {
+                    if (document.documentElement.classList.contains('dark')) {
+                        document.documentElement.classList.remove('dark');
+                        localStorage.setItem('theme', 'light');
+                    } else {
+                        document.documentElement.classList.add('dark');
+                        localStorage.setItem('theme', 'dark');
+                    }
+                });
+            }
+            
+            // Check for saved theme preference
+            if (localStorage.getItem('theme') === 'dark' || 
+                (!localStorage.getItem('theme') && window.matchMedia('(prefers-color-scheme: dark)').matches)) {
+                document.documentElement.classList.add('dark');
+            } else {
+                document.documentElement.classList.remove('dark');
+            }
+        });
+    </script>
+    
+    {% block extra_scripts %}{% endblock %}
+</body>
+</html>
