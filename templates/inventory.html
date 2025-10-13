@@ -5,60 +5,140 @@
 <script>
     function inventoryData() {
         return {
-            powders: [
-                { id: 1, name: 'Matte Black TGIC', sku: 'P-10245', stock: 52, minLevel: 30 },
-                { id: 2, name: 'Gloss White', sku: 'P-10246', stock: 25, minLevel: 30 },
-                { id: 3, name: 'Metallic Silver', sku: 'P-10247', stock: 15, minLevel: 20 },
-                { id: 4, name: 'Bronze Texture', sku: 'P-10248', stock: 45, minLevel: 25 }
-            ],
+            powders: [],
             showAddPowderModal: false,
             editingPowder: false,
             powderForm: {
                 id: null,
                 name: '',
                 sku: '',
-                stock: 0,
-                minLevel: 0
+                current_stock: 0,
+                min_level: 0
             },
-            
-            savePowder() {
-                if (this.editingPowder) {
-                    const index = this.powders.findIndex(p => p.id === this.powderForm.id);
-                    if (index !== -1) {
-                        this.powders[index] = { ...this.powderForm };
+            loading: true,
+
+            async init() {
+                await this.loadPowders();
+            },
+
+            async loadPowders() {
+                try {
+                    const response = await fetch('/api/powders/');
+                    if (response.ok) {
+                        this.powders = await response.json();
+                    } else {
+                        console.error('Failed to load powders');
                     }
-                } else {
-                    const newId = Math.max(...this.powders.map(p => p.id)) + 1;
-                    this.powders.push({
-                        ...this.powderForm,
-                        id: newId
-                    });
+                } catch (error) {
+                    console.error('Error loading powders:', error);
+                } finally {
+                    this.loading = false;
                 }
-                this.showAddPowderModal = false;
-                this.resetPowderForm();
             },
-            
-            editPowder(powder) {
+
+            async savePowder() {
+                try {
+                    const csrfToken = this.getCSRFToken();
+                    let response;
+                    if (this.editingPowder) {
+                        response = await fetch(`/api/powders/${this.powderForm.id}/`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken
+                            },
+                            body: JSON.stringify(this.powderForm)
+                        });
+                    } else {
+                        response = await fetch('/api/powders/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': csrfToken
+                            },
+                            body: JSON.stringify(this.powderForm)
+                        });
+                    }
+
+                    if (response.ok) {
+                        await this.loadPowders();
+                        this.showAddPowderModal = false;
+                        this.resetPowderForm();
+                    } else {
+                        const error = await response.json();
+                        alert('Error saving powder: ' + JSON.stringify(error));
+                    }
+                } catch (error) {
+                    console.error('Error saving powder:', error);
+                    alert('Error saving powder');
+                }
+            },
+
+            async editPowder(powder) {
                 this.powderForm = { ...powder };
                 this.editingPowder = true;
                 this.showAddPowderModal = true;
             },
-            
-            deletePowder(id) {
+
+            async deletePowder(id) {
                 if (confirm('Are you sure you want to delete this powder?')) {
-                    this.powders = this.powders.filter(p => p.id !== id);
+                    try {
+                        const csrfToken = this.getCSRFToken();
+                        const response = await fetch(`/api/powders/${id}/`, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRFToken': csrfToken
+                            }
+                        });
+
+                        if (response.ok) {
+                            await this.loadPowders();
+                        } else {
+                            alert('Error deleting powder');
+                        }
+                    } catch (error) {
+                        console.error('Error deleting powder:', error);
+                        alert('Error deleting powder');
+                    }
                 }
             },
-            
+
+            // Add this helper function to get CSRF token
+            getCSRFToken() {
+                const name = 'csrftoken';
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
+            },
+
             resetPowderForm() {
                 this.powderForm = {
                     id: null,
                     name: '',
                     sku: '',
-                    stock: 0,
-                    minLevel: 0
+                    current_stock: 0,
+                    min_level: 0
                 };
                 this.editingPowder = false;
+            },
+
+            getStatus(powder) {
+                if (powder.current_stock <= powder.min_level) {
+                    return { text: 'Critical', class: 'bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300' };
+                } else if (powder.current_stock <= powder.min_level * 1.2) {
+                    return { text: 'Low Stock', class: 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300' };
+                } else {
+                    return { text: 'In Stock', class: 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300' };
+                }
             }
         }
     }
@@ -66,75 +146,89 @@
 {% endblock %}
 
 {% block content %}
-<div class="fade-in" x-data="inventoryData()">
+<div class="fade-in" x-data="inventoryData()" x-init="init()">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Inventory Management</h2>
         <div class="flex items-center gap-2">
-            <button @click="showAddPowderModal = true" 
-                    class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
+            <button @click="showAddPowderModal = true"
+                class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
                 <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">add</span>
                 Add New Powder
             </button>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Loading State -->
+    <template x-if="loading">
+        <div class="flex justify-center items-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    </template>
+
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3" x-show="!loading">
         <!-- Inventory Cards -->
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Powder Stock</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">1,245 kg</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                        x-text="powders.reduce((sum, powder) => sum + powder.current_stock, 0) + ' kg'"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">inventory_2</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+3%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last month</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-red-600 dark:text-red-300">Low Stock Items</p>
-                    <p class="text-2xl font-bold text-red-700 dark:text-red-200">3</p>
+                    <p class="text-2xl font-bold text-red-700 dark:text-red-200"
+                        x-text="powders.filter(p => p.current_stock <= p.min_level * 1.2).length"></p>
                 </div>
                 <span class="material-symbols-outlined text-red-500 dark:text-red-400">warning</span>
             </div>
-            <div class="flex items-baseline gap-2 mt-4">
-                <p class="text-sm text-red-600 dark:text-red-300">Need immediate attention</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Powder Varieties</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">24</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="powders.length"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">category</span>
-            </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+2</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">new this quarter</p>
             </div>
         </div>
     </div>
 
     <!-- Powder List Table -->
-    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6"
+        x-show="!loading">
         <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Powder Inventory</h3>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200/10 dark:divide-gray-700/50">
                 <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Powder Name</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">SKU</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Current Stock</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Min Level</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Status</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Powder Name</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            SKU</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Current Stock</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Min Level</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Status</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200/10 dark:divide-gray-700/50">
@@ -142,11 +236,13 @@
                         <tr>
                             <td class="px-4 py-4 whitespace-nowrap">
                                 <div class="flex items-center">
-                                    <div class="flex-shrink-0 h-10 w-10 rounded-lg bg-gray-200/10 dark:bg-gray-700/50 flex items-center justify-center">
+                                    <div
+                                        class="flex-shrink-0 h-10 w-10 rounded-lg bg-gray-200/10 dark:bg-gray-700/50 flex items-center justify-center">
                                         <span class="material-symbols-outlined text-primary">grain</span>
                                     </div>
                                     <div class="ml-4">
-                                        <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="powder.name"></div>
+                                        <div class="text-sm font-medium text-gray-900 dark:text-white"
+                                            x-text="powder.name"></div>
                                     </div>
                                 </div>
                             </td>
@@ -154,22 +250,25 @@
                                 <div class="text-sm text-gray-500 dark:text-gray-400" x-text="powder.sku"></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="powder.stock + ' kg'"></div>
+                                <div class="text-sm font-medium text-gray-900 dark:text-white"
+                                    x-text="powder.current_stock + ' kg'"></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="powder.minLevel + ' kg'"></div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="powder.min_level + ' kg'">
+                                </div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <span x-show="powder.stock > powder.minLevel * 1.2" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">In Stock</span>
-                                <span x-show="powder.stock <= powder.minLevel * 1.2 && powder.stock > powder.minLevel" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">Low Stock</span>
-                                <span x-show="powder.stock <= powder.minLevel" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">Critical</span>
+                                <template x-if="getStatus(powder)">
+                                    <span :class="getStatus(powder).class"
+                                        class="px-2 py-1 text-xs font-semibold rounded-full"
+                                        x-text="getStatus(powder).text"></span>
+                                </template>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                <button @click="editPowder(powder)" class="text-primary hover:text-primary/80 mr-3">Edit</button>
-                                <button @click="deletePowder(powder.id)" class="text-red-500 hover:text-red-700">Delete</button>
+                                <button @click="editPowder(powder)"
+                                    class="text-primary hover:text-primary/80 mr-3">Edit</button>
+                                <button @click="deletePowder(powder.id)"
+                                    class="text-red-500 hover:text-red-700">Delete</button>
                             </td>
                         </tr>
                     </template>
@@ -179,33 +278,48 @@
     </div>
 
     <!-- Add Powder Modal -->
-    <div x-show="showAddPowderModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
+    <div x-show="showAddPowderModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
         <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingPowder ? 'Edit Powder' : 'Add New Powder'"></h3>
-            <form @submit.prevent="savePowder">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4"
+                x-text="editingPowder ? 'Edit Powder' : 'Add New Powder'"></h3>
+            <form @submit.prevent="savePowder()">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Powder Name</label>
-                        <input type="text" x-model="powderForm.name" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Powder
+                            Name</label>
+                        <input type="text" x-model="powderForm.name"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">SKU</label>
-                        <input type="text" x-model="powderForm.sku" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <input type="text" x-model="powderForm.sku"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Stock (kg)</label>
-                        <input type="number" x-model="powderForm.stock" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Current Stock
+                            (kg)</label>
+                        <input type="number" x-model="powderForm.current_stock"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Minimum Level (kg)</label>
-                        <input type="number" x-model="powderForm.minLevel" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Minimum Level
+                            (kg)</label>
+                        <input type="number" x-model="powderForm.min_level"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" @click="showAddPowderModal = false; resetPowderForm()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    <button type="button" @click="showAddPowderModal = false; resetPowderForm()"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                         Cancel
                     </button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    <button type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
                         <span x-text="editingPowder ? 'Update' : 'Add'"></span> Powder
                     </button>
                 </div>

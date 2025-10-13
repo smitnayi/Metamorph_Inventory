@@ -5,59 +5,124 @@
 <script>
     function qcData() {
         return {
-            qcReports: [
-                { id: 'QC-2023-0876', product: 'Matte Black TGIC', testDate: 'Nov 15, 2023', inspector: 'Alex Johnson', result: 'Passed' },
-                { id: 'QC-2023-0877', product: 'Gloss White', testDate: 'Nov 15, 2023', inspector: 'Maria Garcia', result: 'Failed' },
-                { id: 'QC-2023-0878', product: 'Metallic Silver', testDate: 'Nov 14, 2023', inspector: 'James Wilson', result: 'Passed' }
-            ],
+            qcReports: [],
             showAddQCReportModal: false,
             editingQCReport: false,
             qcReportForm: {
                 id: null,
-                product: '',
-                testDate: '',
+                report_id: '',
+                product_name: '',
+                test_date: '',
                 inspector: '',
-                result: 'Passed'
+                result: 'passed',
+                notes: ''
+                // removed created_by from here
             },
-            
-            saveQCReport() {
-                if (this.editingQCReport) {
-                    const index = this.qcReports.findIndex(r => r.id === this.qcReportForm.id);
-                    if (index !== -1) {
-                        this.qcReports[index] = { ...this.qcReportForm };
+            loading: true,
+
+            async init() {
+                await this.loadQCReports();
+            },
+
+            async loadQCReports() {
+                try {
+                    const response = await fetch('/api/qc-reports/');
+                    if (response.ok) {
+                        this.qcReports = await response.json();
+                    } else {
+                        console.error('Failed to load QC reports');
                     }
-                } else {
-                    const newId = 'QC-2023-' + (Math.floor(Math.random() * 9000) + 1000);
-                    this.qcReports.push({
-                        ...this.qcReportForm,
-                        id: newId
-                    });
+                } catch (error) {
+                    console.error('Error loading QC reports:', error);
+                } finally {
+                    this.loading = false;
                 }
-                this.showAddQCReportModal = false;
-                this.resetQCReportForm();
             },
-            
-            editQCReport(report) {
+
+            async saveQCReport() {
+                try {
+                    let response;
+                    if (this.editingQCReport) {
+                        // Update existing report
+                        response = await fetch(`/api/qc-reports/${this.qcReportForm.id}/`, {
+                            method: 'PUT',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify(this.qcReportForm)
+                        });
+                    } else {
+                        // Create new report
+                        response = await fetch('/api/qc-reports/', {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            },
+                            body: JSON.stringify(this.qcReportForm)
+                        });
+                    }
+
+                    if (response.ok) {
+                        await this.loadQCReports(); // Reload the list
+                        this.showAddQCReportModal = false;
+                        this.resetQCReportForm();
+                    } else {
+                        const error = await response.json();
+                        alert('Error saving QC report: ' + JSON.stringify(error));
+                    }
+                } catch (error) {
+                    console.error('Error saving QC report:', error);
+                    alert('Error saving QC report');
+                }
+            },
+
+            async editQCReport(report) {
                 this.qcReportForm = { ...report };
                 this.editingQCReport = true;
                 this.showAddQCReportModal = true;
             },
-            
-            deleteQCReport(id) {
+
+            async deleteQCReport(id) {
                 if (confirm('Are you sure you want to delete this QC report?')) {
-                    this.qcReports = this.qcReports.filter(r => r.id !== id);
+                    try {
+                        const response = await fetch(`/api/qc-reports/${id}/`, {
+                            method: 'DELETE',
+                            headers: {
+                                'X-CSRFToken': '{{ csrf_token }}'
+                            }
+                        });
+
+                        if (response.ok) {
+                            await this.loadQCReports(); // Reload the list
+                        } else {
+                            alert('Error deleting QC report');
+                        }
+                    } catch (error) {
+                        console.error('Error deleting QC report:', error);
+                        alert('Error deleting QC report');
+                    }
                 }
             },
-            
+
             resetQCReportForm() {
                 this.qcReportForm = {
                     id: null,
-                    product: '',
-                    testDate: '',
+                    report_id: '',
+                    product_name: '',
+                    test_date: '',
                     inspector: '',
-                    result: 'Passed'
+                    result: 'passed',
+                    notes: ''
                 };
                 this.editingQCReport = false;
+            },
+
+            calculatePassRate() {
+                const total = this.qcReports.length;
+                const passed = this.qcReports.filter(report => report.result === 'passed').length;
+                return total > 0 ? ((passed / total) * 100).toFixed(1) : 0;
             }
         }
     }
@@ -65,117 +130,133 @@
 {% endblock %}
 
 {% block content %}
-<div class="fade-in" x-data="qcData()">
+<div class="fade-in" x-data="qcData()" x-init="init()">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Quality Control</h2>
         <div class="flex items-center gap-2">
-            <button @click="showAddQCReportModal = true" 
-                    class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
+            <button @click="showAddQCReportModal = true"
+                class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
                 <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">add</span>
                 New QC Report
             </button>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <!-- Loading State -->
+    <template x-if="loading">
+        <div class="flex justify-center items-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    </template>
+
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4" x-show="!loading">
         <!-- QC Cards -->
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Pass Rate</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">96.2%</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="calculatePassRate() + '%'"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">verified</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+1.2%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last month</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Tests Today</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">34</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Tests</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="qcReports.length"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">science</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+8</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs yesterday</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-red-600 dark:text-red-300">Failures</p>
-                    <p class="text-2xl font-bold text-red-700 dark:text-red-200">3</p>
+                    <p class="text-2xl font-bold text-red-700 dark:text-red-200"
+                        x-text="qcReports.filter(report => report.result === 'failed').length"></p>
                 </div>
                 <span class="material-symbols-outlined text-red-500 dark:text-red-400">cancel</span>
             </div>
-            <div class="flex items-baseline gap-2 mt-4">
-                <p class="text-sm text-red-600 dark:text-red-300">Requires investigation</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Review</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">7</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Pending</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                        x-text="qcReports.filter(report => report.result === 'pending').length"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">pending</span>
-            </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-yellow-500 text-sm font-bold">-2</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs yesterday</p>
             </div>
         </div>
     </div>
 
     <!-- QC Reports -->
-    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6"
+        x-show="!loading">
         <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Recent QC Reports</h3>
         <div class="overflow-x-auto">
             <table class="min-w-full divide-y divide-gray-200/10 dark:divide-gray-700/50">
                 <thead>
                     <tr>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Report ID</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Product</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Test Date</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Inspector</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Result</th>
-                        <th class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">Actions</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Report ID</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Product</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Test Date</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Inspector</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Result</th>
+                        <th
+                            class="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                            Actions</th>
                     </tr>
                 </thead>
                 <tbody class="divide-y divide-gray-200/10 dark:divide-gray-700/50">
                     <template x-for="report in qcReports" :key="report.id">
                         <tr>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="text-sm font-medium text-gray-900 dark:text-white" x-text="report.id"></div>
+                                <div class="text-sm font-medium text-gray-900 dark:text-white"
+                                    x-text="report.report_id"></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="report.product"></div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="report.product_name">
+                                </div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <div class="text-sm text-gray-500 dark:text-gray-400" x-text="report.testDate"></div>
+                                <div class="text-sm text-gray-500 dark:text-gray-400"
+                                    x-text="new Date(report.test_date).toLocaleDateString()"></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
                                 <div class="text-sm text-gray-500 dark:text-gray-400" x-text="report.inspector"></div>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap">
-                                <span x-show="report.result === 'Passed'" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">Passed</span>
-                                <span x-show="report.result === 'Failed'" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">Failed</span>
-                                <span x-show="report.result === 'Pending'" 
-                                      class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">Pending</span>
+                                <span x-show="report.result === 'passed'"
+                                    class="px-2 py-1 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">Passed</span>
+                                <span x-show="report.result === 'failed'"
+                                    class="px-2 py-1 text-xs font-semibold rounded-full bg-red-100 dark:bg-red-900/50 text-red-800 dark:text-red-300">Failed</span>
+                                <span x-show="report.result === 'pending'"
+                                    class="px-2 py-1 text-xs font-semibold rounded-full bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300">Pending</span>
                             </td>
                             <td class="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                                <button @click="editQCReport(report)" class="text-primary hover:text-primary/80 mr-3">Edit</button>
-                                <button @click="deleteQCReport(report.id)" class="text-red-500 hover:text-red-700">Delete</button>
+                                <button @click="editQCReport(report)"
+                                    class="text-primary hover:text-primary/80 mr-3">Edit</button>
+                                <button @click="deleteQCReport(report.id)"
+                                    class="text-red-500 hover:text-red-700">Delete</button>
                             </td>
                         </tr>
                     </template>
@@ -185,37 +266,62 @@
     </div>
 
     <!-- Add QC Report Modal -->
-    <div x-show="showAddQCReportModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
+    <div x-show="showAddQCReportModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
         <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingQCReport ? 'Edit QC Report' : 'New QC Report'"></h3>
-            <form @submit.prevent="saveQCReport">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4"
+                x-text="editingQCReport ? 'Edit QC Report' : 'New QC Report'"></h3>
+            <form @submit.prevent="saveQCReport()">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
-                        <input type="text" x-model="qcReportForm.product" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Report ID</label>
+                        <input type="text" x-model="qcReportForm.report_id"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product
+                            Name</label>
+                        <input type="text" x-model="qcReportForm.product_name"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Test Date</label>
-                        <input type="date" x-model="qcReportForm.testDate" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <input type="date" x-model="qcReportForm.test_date"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Inspector</label>
-                        <input type="text" x-model="qcReportForm.inspector" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <input type="text" x-model="qcReportForm.inspector"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Result</label>
-                        <select x-model="qcReportForm.result" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
-                            <option value="Passed">Passed</option>
-                            <option value="Failed">Failed</option>
-                            <option value="Pending">Pending</option>
+                        <select x-model="qcReportForm.result"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
+                            <option value="passed">Passed</option>
+                            <option value="failed">Failed</option>
+                            <option value="pending">Pending</option>
                         </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
+                        <textarea x-model="qcReportForm.notes"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            rows="3"></textarea>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" @click="showAddQCReportModal = false; resetQCReportForm()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    <button type="button" @click="showAddQCReportModal = false; resetQCReportForm()"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                         Cancel
                     </button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    <button type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
                         <span x-text="editingQCReport ? 'Update' : 'Add'"></span> Report
                     </button>
                 </div>

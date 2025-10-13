@@ -5,78 +5,85 @@
 <script>
     function productionData() {
         return {
-            productionOrders: [
-                { id: 'P-2341', product: 'Matte Black TGIC', line: 2, dueDate: '2023-11-20', status: 'In Progress' },
-                { id: 'P-2342', product: 'Gloss White', line: 1, dueDate: '2023-11-21', status: 'Pending' },
-                { id: 'P-2343', product: 'Metallic Silver', line: 3, dueDate: '2023-11-20', status: 'In Progress' }
-            ],
-            showAddProductionOrderModal: false,
-            editingProductionOrder: false,
-            productionOrderForm: {
-                id: null,
-                product: '',
-                line: '1',
-                dueDate: '',
-                status: 'Pending'
+            // ... existing properties ...
+            showUpdateUtilitiesModal: false,
+            selectedOrder: null,
+            utilitiesForm: {
+                electricity_used: 0,
+                gas_used: 0,
+                water_used: 0
             },
-            
-            saveProductionOrder() {
-                if (this.editingProductionOrder) {
-                    const index = this.productionOrders.findIndex(o => o.id === this.productionOrderForm.id);
-                    if (index !== -1) {
-                        this.productionOrders[index] = { ...this.productionOrderForm };
+
+            // ... existing methods ...
+
+            // ADD THESE NEW METHODS:
+            async loadOrderUtilities(orderId) {
+                try {
+                    const response = await fetch(`/api/orders/${orderId}/utilities/`);
+                    if (response.ok) {
+                        const orderData = await response.json();
+                        this.selectedOrder = orderData;
+                        this.utilitiesForm = {
+                            electricity_used: orderData.electricity_used || 0,
+                            gas_used: orderData.gas_used || 0,
+                            water_used: orderData.water_used || 0
+                        };
+                        this.showUpdateUtilitiesModal = true;
                     }
-                } else {
-                    const newId = 'P-' + (Math.floor(Math.random() * 9000) + 1000);
-                    this.productionOrders.push({
-                        ...this.productionOrderForm,
-                        id: newId
+                } catch (error) {
+                    console.error('Error loading order utilities:', error);
+                }
+            },
+
+            async updateOrderUtilities(orderId) {
+                try {
+                    const csrfToken = this.getCSRFToken();
+                    const response = await fetch(`/api/orders/${orderId}/update-utilities/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(this.utilitiesForm)
                     });
-                }
-                this.showAddProductionOrderModal = false;
-                this.resetProductionOrderForm();
-            },
-            
-            editProductionOrder(order) {
-                this.productionOrderForm = { ...order };
-                this.editingProductionOrder = true;
-                this.showAddProductionOrderModal = true;
-            },
-            
-            deleteProductionOrder(id) {
-                if (confirm('Are you sure you want to delete this production order?')) {
-                    this.productionOrders = this.productionOrders.filter(o => o.id !== id);
+
+                    if (response.ok) {
+                        await this.loadProductionOrders();
+                        this.showUpdateUtilitiesModal = false;
+                        this.resetUtilitiesForm();
+                    } else {
+                        const error = await response.json();
+                        alert('Error updating utilities: ' + JSON.stringify(error));
+                    }
+                } catch (error) {
+                    console.error('Error updating utilities:', error);
+                    alert('Error updating utilities');
                 }
             },
-            
-            resetProductionOrderForm() {
-                this.productionOrderForm = {
-                    id: null,
-                    product: '',
-                    line: '1',
-                    dueDate: '',
-                    status: 'Pending'
+
+            resetUtilitiesForm() {
+                this.utilitiesForm = {
+                    electricity_used: 0,
+                    gas_used: 0,
+                    water_used: 0
                 };
-                this.editingProductionOrder = false;
+                this.selectedOrder = null;
             },
-            
-            formatDate(dateString) {
-                const date = new Date(dateString);
-                return date.toLocaleDateString('en-US', { 
-                    weekday: 'long', 
-                    year: 'numeric', 
-                    month: 'short', 
-                    day: 'numeric' 
-                });
-            },
-            
-            getStatusColor(status) {
-                switch(status) {
-                    case 'In Progress': return 'bg-yellow-100 dark:bg-yellow-900/50 text-yellow-800 dark:text-yellow-300';
-                    case 'Pending': return 'bg-blue-100 dark:bg-blue-900/50 text-blue-800 dark:text-blue-300';
-                    case 'Completed': return 'bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300';
-                    default: return 'bg-gray-100 dark:bg-gray-900/50 text-gray-800 dark:text-gray-300';
+
+            getCSRFToken() {
+                const name = 'csrftoken';
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
                 }
+                return cookieValue;
             }
         }
     }
@@ -84,83 +91,82 @@
 {% endblock %}
 
 {% block content %}
-<div class="fade-in" x-data="productionData()">
+<div class="fade-in" x-data="productionData()" x-init="init()">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
         <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Production Overview</h2>
         <div class="flex items-center gap-2">
-            <button @click="showAddProductionOrderModal = true" 
-                    class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
+            <button @click="showAddProductionOrderModal = true"
+                class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
                 <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">add</span>
                 New Production Order
             </button>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
+    <!-- Loading State -->
+    <template x-if="loading">
+        <div class="flex justify-center items-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    </template>
+
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4" x-show="!loading">
         <!-- Production Cards -->
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Jobs</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="productionOrders.filter(order => order.status === 'In Progress').length"></p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                        x-text="productionOrders.filter(order => order.status === 'in_progress').length"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">precision_manufacturing</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+2</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs yesterday</p>
-            </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
                     <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Completed Today</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">47</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                        x-text="productionOrders.filter(order => order.status === 'completed').length"></p>
                 </div>
                 <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">check_circle</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+5%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs target</p>
+        </div>
+
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Pending Orders</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                        x-text="productionOrders.filter(order => order.status === 'pending').length"></p>
+                </div>
+                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">pending</span>
             </div>
         </div>
 
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+        <div
+            class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Efficiency Rate</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">94%</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Total Orders</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="productionOrders.length"></p>
                 </div>
-                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">trending_up</span>
-            </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">+2%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last week</p>
-            </div>
-        </div>
-
-        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
-            <div class="flex justify-between items-start">
-                <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Scrap Rate</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">2.3%</p>
-                </div>
-                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">recycling</span>
-            </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-red-500 text-sm font-bold">+0.2%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs target</p>
+                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">list_alt</span>
             </div>
         </div>
     </div>
 
     <!-- Production Schedule -->
-    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+    <div class="mt-8 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6"
+        x-show="!loading">
         <div class="flex items-center justify-between">
             <h3 class="text-xl font-bold text-gray-900 dark:text-white">Production Schedule</h3>
-            <button @click="showAddProductionOrderModal = true" 
-                    class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
+            <button @click="showAddProductionOrderModal = true"
+                class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors">
                 <span>Add New Order</span>
                 <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">add</span>
             </button>
@@ -173,17 +179,27 @@
                             <div class="flex-1">
                                 <div class="flex items-center justify-between">
                                     <div>
-                                        <p class="text-sm font-medium text-gray-900 dark:text-white" x-text="'Job #' + order.id + ' - ' + order.product"></p>
-                                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="'Line ' + order.line + ' • Due: ' + formatDate(order.dueDate)"></p>
+                                        <p class="text-sm font-medium text-gray-900 dark:text-white"
+                                            x-text="'Job #' + order.order_id + ' - ' + order.product_name"></p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400"
+                                            x-text="'Line ' + order.production_line + ' • Due: ' + formatDate(order.due_date) + ' • Qty: ' + order.quantity">
+                                        </p>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span :class="getStatusColor(order.status)" 
-                                              class="px-2 py-1 text-xs font-semibold rounded-full" 
-                                              x-text="order.status"></span>
-                                        <button @click="editProductionOrder(order)" class="text-primary hover:text-primary/80">
+                                        <span :class="getStatusColor(order.status)"
+                                            class="px-2 py-1 text-xs font-semibold rounded-full"
+                                            x-text="getStatusText(order.status)"></span>
+                                        <button @click="editProductionOrder(order)"
+                                            class="text-primary hover:text-primary/80">
                                             <span class="material-symbols-outlined text-sm">edit</span>
                                         </button>
-                                        <button @click="deleteProductionOrder(order.id)" class="text-red-500 hover:text-red-700">
+                                        <!-- UTILITIES BUTTON ADDED HERE -->
+                                        <button @click="loadOrderUtilities(order.order_id)"
+                                            class="text-blue-500 hover:text-blue-700" title="Update Utilities">
+                                            <span class="material-symbols-outlined text-sm">bolt</span>
+                                        </button>
+                                        <button @click="deleteProductionOrder(order.id)"
+                                            class="text-red-500 hover:text-red-700">
                                             <span class="material-symbols-outlined text-sm">delete</span>
                                         </button>
                                     </div>
@@ -197,18 +213,32 @@
     </div>
 
     <!-- Add Production Order Modal -->
-    <div x-show="showAddProductionOrderModal" class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
+    <div x-show="showAddProductionOrderModal"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" x-cloak>
         <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
-            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4" x-text="editingProductionOrder ? 'Edit Production Order' : 'New Production Order'"></h3>
-            <form @submit.prevent="saveProductionOrder">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4"
+                x-text="editingProductionOrder ? 'Edit Production Order' : 'New Production Order'"></h3>
+            <form @submit.prevent="saveProductionOrder()">
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product</label>
-                        <input type="text" x-model="productionOrderForm.product" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Order ID</label>
+                        <input type="text" x-model="productionOrderForm.order_id"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Production Line</label>
-                        <select x-model="productionOrderForm.line" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Product
+                            Name</label>
+                        <input type="text" x-model="productionOrderForm.product_name"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Production
+                            Line</label>
+                        <select x-model="productionOrderForm.production_line"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                             <option value="1">Line 1</option>
                             <option value="2">Line 2</option>
                             <option value="3">Line 3</option>
@@ -216,22 +246,35 @@
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Due Date</label>
-                        <input type="date" x-model="productionOrderForm.dueDate" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
+                        <input type="date" x-model="productionOrderForm.due_date"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Quantity</label>
+                        <input type="number" x-model="productionOrderForm.quantity"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                        <select x-model="productionOrderForm.status" class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" required>
-                            <option value="Pending">Pending</option>
-                            <option value="In Progress">In Progress</option>
-                            <option value="Completed">Completed</option>
+                        <select x-model="productionOrderForm.status"
+                            class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                            required>
+                            <option value="pending">Pending</option>
+                            <option value="in_progress">In Progress</option>
+                            <option value="completed">Completed</option>
+                            <option value="cancelled">Cancelled</option>
                         </select>
                     </div>
                 </div>
                 <div class="mt-6 flex justify-end space-x-3">
-                    <button type="button" @click="showAddProductionOrderModal = false; resetProductionOrderForm()" class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                    <button type="button" @click="showAddProductionOrderModal = false; resetProductionOrderForm()"
+                        class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
                         Cancel
                     </button>
-                    <button type="submit" class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                    <button type="submit"
+                        class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
                         <span x-text="editingProductionOrder ? 'Update' : 'Add'"></span> Order
                     </button>
                 </div>

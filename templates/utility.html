@@ -2,38 +2,279 @@
 {% block title %}Utilities - Metamorph Metals{% endblock %}
 
 {% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
 <script>
     function utilitiesData() {
         return {
-            timePeriod: 'Live',
-            utilityData: {
-                gas: 245,
-                electricity: 1847,
-                water: 320
+            timePeriod: '7d',
+            utilitiesData: [],
+            monthlyData: {},
+            loading: true,
+            showUpdateUtilitiesModal: false,
+            showConsumptionForm: false,
+            selectedOrder: null,
+            utilitiesForm: {
+                electricity_used: 0,
+                gas_used: 0,
+                water_used: 0,
+                powder_used: 0,
+                powder_type: ''
+            },
+            consumptionForm: {
+                date: new Date().toISOString().split('T')[0],
+                gas_consumption: 0,
+                electricity_usage: 0,
+                water_usage: 0,
+                powder_consumption: 0,
+                powder_type: ''
             },
             
-            updateTimePeriod(period) {
-                this.timePeriod = period;
-                // Simulate data change based on time period
-                if (period === '24h') {
-                    this.utilityData = { gas: 230, electricity: 1920, water: 310 };
-                } else if (period === '7d') {
-                    this.utilityData = { gas: 255, electricity: 1780, water: 335 };
-                } else {
-                    this.utilityData = { gas: 245, electricity: 1847, water: 320 };
+            async init() {
+                await this.loadUtilitiesData();
+                await this.loadMonthlyData();
+            },
+            
+            async loadUtilitiesData() {
+                try {
+                    const response = await fetch('/api/utilities/analytics/');
+                    if (response.ok) {
+                        this.utilitiesData = await response.json();
+                    } else {
+                        console.error('Failed to load utilities data');
+                    }
+                } catch (error) {
+                    console.error('Error loading utilities data:', error);
+                } finally {
+                    this.loading = false;
                 }
             },
             
-            getTrendColor(value) {
-                return value >= 0 ? 'text-green-500' : 'text-red-500';
+            async loadMonthlyData() {
+                try {
+                    const response = await fetch('/api/utilities/monthly/');
+                    if (response.ok) {
+                        this.monthlyData = await response.json();
+                    }
+                } catch (error) {
+                    console.error('Error loading monthly data:', error);
+                }
             },
             
-            getTrendIcon(value) {
-                return value >= 0 ? 'trending_up' : 'trending_down';
+            async updateOrderUtilities(orderId) {
+                try {
+                    const csrfToken = this.getCSRFToken();
+                    const response = await fetch(`/api/orders/${orderId}/update-utilities/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(this.utilitiesForm)
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadUtilitiesData();
+                        await this.loadMonthlyData();
+                        this.showUpdateUtilitiesModal = false;
+                        this.resetUtilitiesForm();
+                    } else {
+                        const error = await response.json();
+                        alert('Error updating utilities: ' + JSON.stringify(error));
+                    }
+                } catch (error) {
+                    console.error('Error updating utilities:', error);
+                    alert('Error updating utilities');
+                }
+            },
+
+            async submitConsumption() {
+                try {
+                    const csrfToken = this.getCSRFToken();
+                    const response = await fetch('/api/utility-data/', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRFToken': csrfToken
+                        },
+                        body: JSON.stringify(this.consumptionForm)
+                    });
+                    
+                    if (response.ok) {
+                        await this.loadUtilitiesData();
+                        await this.loadMonthlyData();
+                        this.showConsumptionForm = false;
+                        this.resetConsumptionForm();
+                        alert('Consumption data saved successfully!');
+                    } else {
+                        const error = await response.json();
+                        alert('Error saving consumption data: ' + JSON.stringify(error));
+                    }
+                } catch (error) {
+                    console.error('Error saving consumption data:', error);
+                    alert('Error saving consumption data');
+                }
+            },
+            
+            async loadOrderUtilities(orderId) {
+                try {
+                    const response = await fetch(`/api/orders/${orderId}/utilities/`);
+                    if (response.ok) {
+                        const orderData = await response.json();
+                        this.selectedOrder = orderData;
+                        this.utilitiesForm = {
+                            electricity_used: orderData.electricity_used || 0,
+                            gas_used: orderData.gas_used || 0,
+                            water_used: orderData.water_used || 0,
+                            powder_used: 0,
+                            powder_type: ''
+                        };
+                        this.showUpdateUtilitiesModal = true;
+                    }
+                } catch (error) {
+                    console.error('Error loading order utilities:', error);
+                }
+            },
+            
+            resetUtilitiesForm() {
+                this.utilitiesForm = {
+                    electricity_used: 0,
+                    gas_used: 0,
+                    water_used: 0,
+                    powder_used: 0,
+                    powder_type: ''
+                };
+                this.selectedOrder = null;
+            },
+
+            resetConsumptionForm() {
+                this.consumptionForm = {
+                    date: new Date().toISOString().split('T')[0],
+                    gas_consumption: 0,
+                    electricity_usage: 0,
+                    water_usage: 0,
+                    powder_consumption: 0,
+                    powder_type: ''
+                };
+            },
+            
+            getTrendIcon(current, previous) {
+                if (current > previous) return 'trending_up';
+                if (current < previous) return 'trending_down';
+                return 'remove';
+            },
+            
+            getTrendColor(current, previous) {
+                if (current > previous) return 'text-red-500';
+                if (current < previous) return 'text-green-500';
+                return 'text-gray-500';
+            },
+            
+            calculateTrend(current, previous) {
+                if (previous === 0) return 100;
+                return ((current - previous) / previous * 100).toFixed(1);
             },
             
             formatNumber(num) {
-                return num.toString().replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+                return num.toLocaleString('en-US', { maximumFractionDigits: 2 });
+            },
+
+            // Generate sparkline data
+            generateSparklineData(type) {
+                const data = this.utilitiesData.map(d => {
+                    switch(type) {
+                        case 'gas': return d.total_gas;
+                        case 'electricity': return d.total_electricity;
+                        case 'water': return d.total_water;
+                        case 'powder': return d.total_powder || 0;
+                        default: return 0;
+                    }
+                });
+                
+                // Normalize data for SVG
+                const max = Math.max(...data);
+                const min = Math.min(...data);
+                const range = max - min || 1;
+                
+                return data.map((value, index) => {
+                    const x = (index / (data.length - 1)) * 472;
+                    const y = 100 - ((value - min) / range) * 80;
+                    return { x, y, value };
+                });
+            },
+
+            // Get sparkline path
+            getSparklinePath(type) {
+                const points = this.generateSparklineData(type);
+                if (points.length === 0) return '';
+                
+                let path = `M ${points[0].x} ${points[0].y}`;
+                for (let i = 1; i < points.length; i++) {
+                    path += ` L ${points[i].x} ${points[i].y}`;
+                }
+                return path;
+            },
+
+            // Get sparkline area
+            getSparklineArea(type) {
+                const points = this.generateSparklineData(type);
+                if (points.length === 0) return '';
+                
+                let path = `M ${points[0].x} ${points[0].y}`;
+                for (let i = 1; i < points.length; i++) {
+                    path += ` L ${points[i].x} ${points[i].y}`;
+                }
+                path += ` L ${points[points.length-1].x} 100 L 0 100 Z`;
+                return path;
+            },
+
+            getCurrentValue(type) {
+                if (this.utilitiesData.length === 0) return 0;
+                const lastData = this.utilitiesData[this.utilitiesData.length - 1];
+                switch(type) {
+                    case 'gas': return lastData.total_gas;
+                    case 'electricity': return lastData.total_electricity;
+                    case 'water': return lastData.total_water;
+                    case 'powder': return lastData.total_powder || 0;
+                    default: return 0;
+                }
+            },
+
+            getTrend(type) {
+                if (this.utilitiesData.length < 2) return { value: 0, icon: 'remove', color: 'text-gray-500' };
+                
+                const current = this.getCurrentValue(type);
+                const previous = this.utilitiesData[this.utilitiesData.length - 2];
+                let previousValue = 0;
+                
+                switch(type) {
+                    case 'gas': previousValue = previous.total_gas; break;
+                    case 'electricity': previousValue = previous.total_electricity; break;
+                    case 'water': previousValue = previous.total_water; break;
+                    case 'powder': previousValue = previous.total_powder || 0; break;
+                }
+                
+                const trend = this.calculateTrend(current, previousValue);
+                const icon = this.getTrendIcon(current, previousValue);
+                const color = this.getTrendColor(current, previousValue);
+                
+                return { value: Math.abs(trend), icon, color, isPositive: current > previousValue };
+            },
+            
+            // CSRF Token helper
+            getCSRFToken() {
+                const name = 'csrftoken';
+                let cookieValue = null;
+                if (document.cookie && document.cookie !== '') {
+                    const cookies = document.cookie.split(';');
+                    for (let i = 0; i < cookies.length; i++) {
+                        const cookie = cookies[i].trim();
+                        if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                            cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                            break;
+                        }
+                    }
+                }
+                return cookieValue;
             }
         }
     }
@@ -41,50 +282,61 @@
 {% endblock %}
 
 {% block content %}
-<div class="fade-in" x-data="utilitiesData()">
+<div class="fade-in" x-data="utilitiesData()" x-init="init()">
     <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Utilities Monitoring</h2>
+        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Utilities Monitoring & Analytics</h2>
         <div class="flex items-center gap-2">
             <div class="flex items-center gap-1 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-1">
-                <button :class="{'bg-primary text-black': timePeriod === 'Live', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Live'}" 
-                        @click="updateTimePeriod('Live')"
-                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">Live</button>
-                <button :class="{'bg-primary text-black': timePeriod === '24h', 'text-gray-600 dark:text-gray-300': timePeriod !== '24h'}" 
-                        @click="updateTimePeriod('24h')"
-                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">24h</button>
                 <button :class="{'bg-primary text-black': timePeriod === '7d', 'text-gray-600 dark:text-gray-300': timePeriod !== '7d'}" 
-                        @click="updateTimePeriod('7d')"
-                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">7d</button>
+                        @click="timePeriod = '7d'"
+                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">7D</button>
+                <button :class="{'bg-primary text-black': timePeriod === '30d', 'text-gray-600 dark:text-gray-300': timePeriod !== '30d'}" 
+                        @click="timePeriod = '30d'"
+                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">30D</button>
             </div>
+            <button @click="showConsumptionForm = true"
+                class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
+                <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">add</span>
+                Add Consumption
+            </button>
         </div>
     </div>
 
-    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2">
+    <!-- Loading State -->
+    <template x-if="loading">
+        <div class="flex justify-center items-center py-12">
+            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+        </div>
+    </template>
+
+    <!-- Sparkline Charts -->
+    <div class="grid grid-cols-1 gap-6 lg:grid-cols-2 mb-8" x-show="!loading">
         <!-- Gas Consumption -->
         <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex items-start justify-between">
                 <div>
                     <h3 class="font-bold text-gray-900 dark:text-white">Gas Consumption</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod + ' Monitoring'"></p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'"></p>
                 </div>
-                <div class="flex items-center gap-1 text-green-500">
-                    <span class="material-symbols-outlined text-sm">trending_up</span>
-                    <span class="font-bold">+2%</span>
+                <div class="flex items-center gap-1" :class="getTrend('gas').color">
+                    <span x-text="getTrend('gas').isPositive ? '+' : '-'"></span>
+                    <span class="font-bold" x-text="getTrend('gas').value + '%'"></span>
+                    <span class="material-symbols-outlined text-sm" x-text="getTrend('gas').icon"></span>
                 </div>
             </div>
             <div class="flex flex-1 items-end gap-6 mt-4">
                 <div class="w-1/2">
                     <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="utilityData.gas + ' m³'"></p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatNumber(getCurrentValue('gas')) + ' m³'"></p>
                 </div>
-                <div class="flex-1 spark-chart-positive-light dark:spark-chart-positive-dark h-16">
+                <div class="flex-1 h-16">
                     <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667V100H0V72.6667Z" fill="url(#paint0_linear_spark_positive)"></path>
-                        <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                        <path :d="getSparklineArea('gas')" fill="url(#paint0_linear_gas)"></path>
+                        <path :d="getSparklinePath('gas')" stroke="#ef4444" stroke-linecap="round" stroke-width="2"></path>
                         <defs>
-                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_positive" x1="236" x2="236" y1="0.666667" y2="100">
-                                <stop stop-color="var(--start-color)"></stop>
-                                <stop offset="1" stop-color="var(--end-color)"></stop>
+                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_gas" x1="236" x2="236" y1="0" y2="100">
+                                <stop stop-color="#ef444433"></stop>
+                                <stop offset="1" stop-color="#ef444400"></stop>
                             </linearGradient>
                         </defs>
                     </svg>
@@ -97,26 +349,93 @@
             <div class="flex items-start justify-between">
                 <div>
                     <h3 class="font-bold text-gray-900 dark:text-white">Electricity Usage</h3>
-                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod + ' Monitoring'"></p>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'"></p>
                 </div>
-                <div class="flex items-center gap-1 text-red-500">
-                    <span class="material-symbols-outlined text-sm">trending_down</span>
-                    <span class="font-bold">-1%</span>
+                <div class="flex items-center gap-1" :class="getTrend('electricity').color">
+                    <span x-text="getTrend('electricity').isPositive ? '+' : '-'"></span>
+                    <span class="font-bold" x-text="getTrend('electricity').value + '%'"></span>
+                    <span class="material-symbols-outlined text-sm" x-text="getTrend('electricity').icon"></span>
                 </div>
             </div>
             <div class="flex flex-1 items-end gap-6 mt-4">
                 <div class="w-1/2">
                     <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatNumber(utilityData.electricity) + ' kWh'"></p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatNumber(getCurrentValue('electricity')) + ' kWh'"></p>
                 </div>
-                <div class="flex-1 spark-chart-negative-light dark:spark-chart-negative-dark h-16">
+                <div class="flex-1 h-16">
                     <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                        <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333V100H0V37.3333Z" fill="url(#paint0_linear_spark_negative)"></path>
-                        <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                        <path :d="getSparklineArea('electricity')" fill="url(#paint0_linear_electricity)"></path>
+                        <path :d="getSparklinePath('electricity')" stroke="#3b82f6" stroke-linecap="round" stroke-width="2"></path>
                         <defs>
-                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_negative" x1="236" x2="236" y1="-49.3333" y2="100">
-                                <stop stop-color="var(--start-color)"></stop>
-                                <stop offset="1" stop-color="var(--end-color)"></stop>
+                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_electricity" x1="236" x2="236" y1="0" y2="100">
+                                <stop stop-color="#3b82f633"></stop>
+                                <stop offset="1" stop-color="#3b82f600"></stop>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Water Usage -->
+        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-bold text-gray-900 dark:text-white">Water Usage</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'"></p>
+                </div>
+                <div class="flex items-center gap-1" :class="getTrend('water').color">
+                    <span x-text="getTrend('water').isPositive ? '+' : '-'"></span>
+                    <span class="font-bold" x-text="getTrend('water').value + '%'"></span>
+                    <span class="material-symbols-outlined text-sm" x-text="getTrend('water').icon"></span>
+                </div>
+            </div>
+            <div class="flex flex-1 items-end gap-6 mt-4">
+                <div class="w-1/2">
+                    <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatNumber(getCurrentValue('water')) + ' m³'"></p>
+                </div>
+                <div class="flex-1 h-16">
+                    <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                        <path :d="getSparklineArea('water')" fill="url(#paint0_linear_water)"></path>
+                        <path :d="getSparklinePath('water')" stroke="#06b6d4" stroke-linecap="round" stroke-width="2"></path>
+                        <defs>
+                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_water" x1="236" x2="236" y1="0" y2="100">
+                                <stop stop-color="#06b6d433"></stop>
+                                <stop offset="1" stop-color="#06b6d400"></stop>
+                            </linearGradient>
+                        </defs>
+                    </svg>
+                </div>
+            </div>
+        </div>
+
+        <!-- Powder Consumption -->
+        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="font-bold text-gray-900 dark:text-white">Powder Consumption</h3>
+                    <p class="text-sm text-gray-500 dark:text-gray-400" x-text="timePeriod === '7d' ? 'Last 7 Days' : 'Last 30 Days'"></p>
+                </div>
+                <div class="flex items-center gap-1" :class="getTrend('powder').color">
+                    <span x-text="getTrend('powder').isPositive ? '+' : '-'"></span>
+                    <span class="font-bold" x-text="getTrend('powder').value + '%'"></span>
+                    <span class="material-symbols-outlined text-sm" x-text="getTrend('powder').icon"></span>
+                </div>
+            </div>
+            <div class="flex flex-1 items-end gap-6 mt-4">
+                <div class="w-1/2">
+                    <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
+                    <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="formatNumber(getCurrentValue('powder')) + ' kg'"></p>
+                </div>
+                <div class="flex-1 h-16">
+                    <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                        <path :d="getSparklineArea('powder')" fill="url(#paint0_linear_powder)"></path>
+                        <path :d="getSparklinePath('powder')" stroke="#8b5cf6" stroke-linecap="round" stroke-width="2"></path>
+                        <defs>
+                            <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_powder" x1="236" x2="236" y1="0" y2="100">
+                                <stop stop-color="#8b5cf633"></stop>
+                                <stop offset="1" stop-color="#8b5cf600"></stop>
                             </linearGradient>
                         </defs>
                     </svg>
@@ -125,49 +444,167 @@
         </div>
     </div>
 
-    <!-- Utility Costs -->
-    <div class="mt-8 grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-3">
+    <!-- Monthly Summary Cards with Icons -->
+    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4 mb-8" x-show="!loading">
         <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Gas Cost</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">$2,847</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Electricity This Month</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                       x-text="formatNumber(monthlyData.this_month?.electricity || 0) + ' kWh'"></p>
                 </div>
-                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">local_gas_station</span>
+                <span class="material-symbols-outlined text-blue-500">bolt</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-red-500 text-sm font-bold">+5%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last month</p>
+            <div class="flex items-center gap-2 mt-2" x-show="monthlyData.last_month">
+                <span :class="getTrendColor(monthlyData.this_month?.electricity, monthlyData.last_month?.electricity)" 
+                      class="material-symbols-outlined text-sm"
+                      x-text="getTrendIcon(monthlyData.this_month?.electricity, monthlyData.last_month?.electricity)"></span>
+                <span :class="getTrendColor(monthlyData.this_month?.electricity, monthlyData.last_month?.electricity)" 
+                      class="text-sm font-medium"
+                      x-text="calculateTrend(monthlyData.this_month?.electricity, monthlyData.last_month?.electricity) + '%'"></span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">vs last month</span>
             </div>
         </div>
 
         <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Electricity Cost</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">$4,231</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Gas This Month</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                       x-text="formatNumber(monthlyData.this_month?.gas || 0) + ' m³'"></p>
                 </div>
-                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">bolt</span>
+                <span class="material-symbols-outlined text-red-500">local_gas_station</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">-2%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last month</p>
+            <div class="flex items-center gap-2 mt-2" x-show="monthlyData.last_month">
+                <span :class="getTrendColor(monthlyData.this_month?.gas, monthlyData.last_month?.gas)" 
+                      class="material-symbols-outlined text-sm"
+                      x-text="getTrendIcon(monthlyData.this_month?.gas, monthlyData.last_month?.gas)"></span>
+                <span :class="getTrendColor(monthlyData.this_month?.gas, monthlyData.last_month?.gas)" 
+                      class="text-sm font-medium"
+                      x-text="calculateTrend(monthlyData.this_month?.gas, monthlyData.last_month?.gas) + '%'"></span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">vs last month</span>
             </div>
         </div>
 
         <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
             <div class="flex justify-between items-start">
                 <div>
-                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Water Cost</p>
-                    <p class="text-2xl font-bold text-gray-900 dark:text-white">$847</p>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Water This Month</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                       x-text="formatNumber(monthlyData.this_month?.water || 0) + ' m³'"></p>
                 </div>
-                <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">water_drop</span>
+                <span class="material-symbols-outlined text-blue-400">water_drop</span>
             </div>
-            <div class="flex items-center gap-2 mt-4">
-                <span class="text-green-500 text-sm font-bold">-1%</span>
-                <p class="text-xs text-gray-400 dark:text-gray-500">vs last month</p>
+            <div class="flex items-center gap-2 mt-2" x-show="monthlyData.last_month">
+                <span :class="getTrendColor(monthlyData.this_month?.water, monthlyData.last_month?.water)" 
+                      class="material-symbols-outlined text-sm"
+                      x-text="getTrendIcon(monthlyData.this_month?.water, monthlyData.last_month?.water)"></span>
+                <span :class="getTrendColor(monthlyData.this_month?.water, monthlyData.last_month?.water)" 
+                      class="text-sm font-medium"
+                      x-text="calculateTrend(monthlyData.this_month?.water, monthlyData.last_month?.water) + '%'"></span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">vs last month</span>
+            </div>
+        </div>
+
+        <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+            <div class="flex justify-between items-start">
+                <div>
+                    <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Powder This Month</p>
+                    <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                       x-text="formatNumber(monthlyData.this_month?.powder || 0) + ' kg'"></p>
+                </div>
+                <span class="material-symbols-outlined text-purple-500">grain</span>
+            </div>
+            <div class="flex items-center gap-2 mt-2" x-show="monthlyData.last_month">
+                <span :class="getTrendColor(monthlyData.this_month?.powder, monthlyData.last_month?.powder)" 
+                      class="material-symbols-outlined text-sm"
+                      x-text="getTrendIcon(monthlyData.this_month?.powder, monthlyData.last_month?.powder)"></span>
+                <span :class="getTrendColor(monthlyData.this_month?.powder, monthlyData.last_month?.powder)" 
+                      class="text-sm font-medium"
+                      x-text="calculateTrend(monthlyData.this_month?.powder, monthlyData.last_month?.powder) + '%'"></span>
+                <span class="text-xs text-gray-500 dark:text-gray-400">vs last month</span>
             </div>
         </div>
     </div>
+
+    <!-- Add Consumption Form Modal -->
+    <div x-show="showConsumptionForm" 
+         class="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4" 
+         x-cloak>
+        <div class="bg-white dark:bg-gray-800 rounded-xl max-w-md w-full p-6">
+            <h3 class="text-xl font-bold text-gray-900 dark:text-white mb-4">Add Daily Consumption</h3>
+            <form @submit.prevent="submitConsumption()">
+                <div class="space-y-4">
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">calendar_today</span>
+                            Date
+                        </label>
+                        <input type="date" x-model="consumptionForm.date"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">local_gas_station</span>
+                            Gas Consumption (m³)
+                        </label>
+                        <input type="number" step="0.01" x-model="consumptionForm.gas_consumption"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">bolt</span>
+                            Electricity Usage (kWh)
+                        </label>
+                        <input type="number" step="0.01" x-model="consumptionForm.electricity_usage"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">water_drop</span>
+                            Water Usage (m³)
+                        </label>
+                        <input type="number" step="0.01" x-model="consumptionForm.water_usage"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                               required>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">grain</span>
+                            Powder Type
+                        </label>
+                        <input type="text" x-model="consumptionForm.powder_type"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white"
+                               placeholder="e.g., Matte Black TGIC">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                            <span class="material-symbols-outlined align-middle text-sm mr-1">scale</span>
+                            Powder Consumption (kg)
+                        </label>
+                        <input type="number" step="0.01" x-model="consumptionForm.powder_consumption"
+                               class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white">
+                    </div>
+                </div>
+                <div class="mt-6 flex justify-end space-x-3">
+                    <button type="button" @click="showConsumptionForm = false; resetConsumptionForm()"
+                            class="px-4 py-2 text-sm font-medium text-gray-700 dark:text-gray-300 bg-gray-200 dark:bg-gray-700 rounded-lg hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors">
+                        Cancel
+                    </button>
+                    <button type="submit"
+                            class="px-4 py-2 text-sm font-medium text-white bg-primary rounded-lg hover:bg-primary/90 transition-colors">
+                        <span class="material-symbols-outlined align-middle text-sm mr-1">save</span>
+                        Save Consumption
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Rest of your existing content (charts, tables, etc.) -->
+    <!-- ... -->
 </div>
 {% endblock %}

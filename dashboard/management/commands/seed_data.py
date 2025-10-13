@@ -29,15 +29,12 @@ class Command(BaseCommand):
         try:
             admin_user = User.objects.get(username='admin')
         except User.DoesNotExist:
-            # Create admin user if doesn't exist
-            admin_user = User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
-            UserProfile.objects.create(user=admin_user, role='admin')
-            self.stdout.write("Created admin user (username: admin, password: admin123)")
+            self.stdout.write(self.style.ERROR("Admin user not found. Please create a superuser first."))
+            return
         
         production_orders = [
             {'order_id': 'P-2341', 'product_name': 'Matte Black TGIC', 'production_line': '2', 'due_date': date.today() + timedelta(days=2), 'status': 'in_progress', 'quantity': 100, 'created_by': admin_user},
             {'order_id': 'P-2342', 'product_name': 'Gloss White', 'production_line': '1', 'due_date': date.today() + timedelta(days=3), 'status': 'pending', 'quantity': 150, 'created_by': admin_user},
-            {'order_id': 'P-2343', 'product_name': 'Metallic Silver', 'production_line': '3', 'due_date': date.today() + timedelta(days=1), 'status': 'in_progress', 'quantity': 75, 'created_by': admin_user},
         ]
         
         for order_data in production_orders:
@@ -52,7 +49,6 @@ class Command(BaseCommand):
         qc_reports = [
             {'report_id': 'QC-2023-0876', 'product_name': 'Matte Black TGIC', 'test_date': date.today(), 'inspector': 'Alex Johnson', 'result': 'passed', 'created_by': admin_user},
             {'report_id': 'QC-2023-0877', 'product_name': 'Gloss White', 'test_date': date.today(), 'inspector': 'Maria Garcia', 'result': 'failed', 'created_by': admin_user},
-            {'report_id': 'QC-2023-0878', 'product_name': 'Metallic Silver', 'test_date': date.today() - timedelta(days=1), 'inspector': 'James Wilson', 'result': 'passed', 'created_by': admin_user},
         ]
         
         for report_data in qc_reports:
@@ -72,5 +68,15 @@ class Command(BaseCommand):
         
         if created:
             self.stdout.write(f"Created utility data for {today}")
+        
+        # Ensure admin has admin role
+        try:
+            admin_profile = admin_user.userprofile
+            admin_profile.role = 'admin'
+            admin_profile.save()
+            self.stdout.write("Set admin user role to 'admin'")
+        except UserProfile.DoesNotExist:
+            UserProfile.objects.create(user=admin_user, role='admin')
+            self.stdout.write("Created admin profile with role 'admin'")
         
         self.stdout.write(self.style.SUCCESS('Successfully seeded database with sample data!'))

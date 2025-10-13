@@ -38,6 +38,7 @@ class ProductionOrderSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionOrder
         fields = '__all__'
+        read_only_fields = ('created_by',)
 
 class QCReportSerializer(serializers.ModelSerializer):
     created_by_name = serializers.CharField(source='created_by.username', read_only=True)
@@ -45,6 +46,7 @@ class QCReportSerializer(serializers.ModelSerializer):
     class Meta:
         model = QCReport
         fields = '__all__'
+        read_only_fields = ('created_by',)
 
 class UtilityDataSerializer(serializers.ModelSerializer):
     class Meta:
@@ -55,3 +57,12 @@ class ProductionLogSerializer(serializers.ModelSerializer):
     class Meta:
         model = ProductionLog
         fields = '__all__'
+
+# New serializers for utilities analytics
+class UtilitiesAnalyticsSerializer(serializers.Serializer):
+    date = serializers.DateField()
+    total_electricity = serializers.FloatField()
+    total_gas = serializers.FloatField()
+    total_water = serializers.FloatField()
+    total_orders = serializers.IntegerField()
+    efficiency = serializers.FloatField()

@@ -1,9 +1,11 @@
 from django.urls import path, include
 from rest_framework import routers
 from . import views
-from .views import (ProductionLogViewSet, RegisterView, dashboard_data, 
-                   PowderViewSet, ProductionOrderViewSet, QCReportViewSet, 
-                   UtilityDataViewSet, powder_list, powder_detail)
+from .views import (
+    ProductionLogViewSet, RegisterView, dashboard_data,
+    PowderViewSet, ProductionOrderViewSet, QCReportViewSet,
+    UtilityDataViewSet, utilities_analytics, order_utilities_detail, update_order_utilities, monthly_consumption
+)
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
 router = routers.DefaultRouter()
@@ -27,14 +29,18 @@ urlpatterns = [
     path('register/', views.register_view, name='register'),
     path('logout/', views.logout_view, name='logout'),
     
-    # APIs
+    # APIs - No authentication required
     path('api/', include(router.urls)),
     path('api/dashboard/', dashboard_data, name='api-dashboard'),
-    path('api/powders/', powder_list, name='powder-list'),
-    path('api/powders/<int:pk>/', powder_detail, name='powder-detail'),
 
-    # JWT Authentication APIs
+    # JWT Authentication APIs (optional)
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),
     path('api/token/refresh/', TokenRefreshView.as_view(), name='token_refresh'),
     path('api/register/', RegisterView.as_view(), name='api_register'),
+
+     # Utilities Analytics APIs
+    path('api/utilities/analytics/', utilities_analytics, name='utilities-analytics'),
+    path('api/utilities/monthly/', monthly_consumption, name='monthly-consumption'),
+    path('api/orders/<str:order_id>/utilities/', order_utilities_detail, name='order-utilities-detail'),
+    path('api/orders/<str:order_id>/update-utilities/', update_order_utilities, name='update-order-utilities'),
 ]

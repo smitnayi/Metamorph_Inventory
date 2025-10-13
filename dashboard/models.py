@@ -1,7 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
 
-# Create your models here.
 class UserProfile(models.Model):
     ROLE_CHOICES = [
         ('admin', 'Administrator'),
@@ -57,8 +56,21 @@ class ProductionOrder(models.Model):
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
+    # Utilities consumption for this order
+    electricity_used = models.FloatField(default=0)  # kWh
+    gas_used = models.FloatField(default=0)  # m³
+    water_used = models.FloatField(default=0)  # m³
+    completed_at = models.DateTimeField(null=True, blank=True)
+    
     def __str__(self):
         return f"{self.order_id} - {self.product_name}"
+    
+    def save(self, *args, **kwargs):
+        # Auto-update completed_at when status changes to completed
+        if self.status == 'completed' and not self.completed_at:
+            from django.utils import timezone
+            self.completed_at = timezone.now()
+        super().save(*args, **kwargs)
 
 class QCReport(models.Model):
     RESULT_CHOICES = [
@@ -81,9 +93,9 @@ class QCReport(models.Model):
 
 class UtilityData(models.Model):
     date = models.DateField()
-    gas_consumption = models.IntegerField(default=0)  # m³
-    electricity_usage = models.IntegerField(default=0)  # kWh
-    water_usage = models.IntegerField(default=0)  # m³
+    gas_consumption = models.FloatField(default=0)  # m³
+    electricity_usage = models.FloatField(default=0)  # kWh
+    water_usage = models.FloatField(default=0)  # m³
     created_at = models.DateTimeField(auto_now_add=True)
     
     class Meta:
