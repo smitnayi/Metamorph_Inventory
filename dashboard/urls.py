@@ -1,10 +1,12 @@
+# dashboard/urls.py
 from django.urls import path, include
 from rest_framework import routers
 from . import views
 from .views import (
     ProductionLogViewSet, RegisterView, dashboard_data,
     PowderViewSet, ProductionOrderViewSet, QCReportViewSet,
-    UtilityDataViewSet, utilities_analytics, order_utilities_detail, update_order_utilities, monthly_consumption
+    UtilityDataViewSet, utilities_analytics, order_utilities_detail, update_order_utilities, monthly_consumption,
+    executive_overview_data, utilities_data, add_utility_consumption  # ADD THESE
 )
 from rest_framework_simplejwt.views import TokenObtainPairView, TokenRefreshView
 
@@ -32,6 +34,11 @@ urlpatterns = [
     # APIs - No authentication required
     path('api/', include(router.urls)),
     path('api/dashboard/', dashboard_data, name='api-dashboard'),
+
+    # NEW API endpoints for data consistency
+    path('api/executive-overview/', executive_overview_data, name='executive_overview_data'),
+    path('api/utilities/current/', utilities_data, name='utilities_data'),
+    path('api/utilities/add-consumption/', add_utility_consumption, name='add_utility_consumption'),
 
     # JWT Authentication APIs (optional)
     path('api/token/', TokenObtainPairView.as_view(), name='token_obtain_pair'),

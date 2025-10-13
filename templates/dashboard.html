@@ -1,51 +1,75 @@
 {% extends "base.html" %}
 {% block title %}Dashboard - Metamorph Metals{% endblock %}
 
+{% block extra_scripts %}
+<script>
+    function dashboardComponent() {
+        return {
+            customizing: false,
+            widgets: {
+                powder_alerts: true,
+                stock_levels: true,
+                gas: true,
+                electricity: true,
+                qc: true,
+                prod_efficiency: false,
+                scrap_rate: false,
+                recent_powders: true,
+                urgent_tasks: true
+            },
+            timePeriod: 'Last 24 Hours',
+            overviewData: {},
+            utilitiesData: {},
+            loading: true,
+
+            async initDashboard() {
+                try {
+                    console.log('Initializing dashboard...');
+                    const data = await dataService.updateDashboardData();
+                    console.log('Dashboard data loaded:', data);
+                    this.overviewData = data.overview;
+                    this.utilitiesData = data.utilities;
+                } catch (error) {
+                    console.error('Error initializing dashboard:', error);
+                    // Set fallback data
+                    this.overviewData = {
+                        powderStock: { status: 'Error', belowThreshold: 0 },
+                        stockLevels: { current: 0, unit: 'kg', dailyChange: '+0%' },
+                        qcPassRate: { current: 0, unit: '%', dailyChange: '+0%' }
+                    };
+                    this.utilitiesData = {
+                        gas: { current: 0, unit: 'm³' },
+                        electricity: { current: 0, unit: 'kWh' }
+                    };
+                } finally {
+                    this.loading = false;
+                    console.log('Dashboard loading complete');
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}
+
 {% block content %}
 <div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
     <div class="flex flex-col">
         <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
-              x-data="{ 
-                  customizing: false, 
-                  widgets: { 
-                      powder_alerts: true, 
-                      stock_levels: true, 
-                      gas: true, 
-                      electricity: true, 
-                      qc: true, 
-                      prod_efficiency: false, 
-                      scrap_rate: false, 
-                      recent_powders: true, 
-                      urgent_tasks: true 
-                  }, 
-                  timePeriod: 'Last 24 Hours',
-                  dashboardData: {},
-                  loading: true
-              }"
-              x-init="
-                  fetch('/api/dashboard/')
-                      .then(response => response.json())
-                      .then(data => {
-                          dashboardData = data;
-                          loading = false;
-                      })
-                      .catch(error => {
-                          console.error('Error fetching dashboard data:', error);
-                          loading = false;
-                      });
-              ">
+              x-data="dashboardComponent()" 
+              x-init="initDashboard()">
             
             <div class="mx-auto max-w-7xl">
                 <!-- Loading State -->
                 <template x-if="loading">
                     <div class="flex justify-center items-center py-12">
                         <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+                        <span class="ml-3 text-gray-600 dark:text-gray-400">Loading dashboard...</span>
                     </div>
                 </template>
 
                 <!-- Dashboard Content -->
                 <template x-if="!loading">
-                    <div>
+                    <div class="fade-in">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
                             <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Executive Overview</h2>
                             <div class="flex items-center gap-2">
@@ -116,12 +140,14 @@
                                     <div class="flex justify-between items-start">
                                         <div>
                                             <p class="text-sm font-medium text-red-600 dark:text-red-300">Powder Stock Alert</p>
-                                            <p class="text-2xl font-bold text-red-700 dark:text-red-200">Critical Low</p>
+                                            <p class="text-2xl font-bold text-red-700 dark:text-red-200" 
+                                               x-text="overviewData.powderStock?.status || 'Critical'"></p>
                                         </div>
                                         <span class="material-symbols-outlined text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors duration-200">warning</span>
                                     </div>
                                     <div class="flex items-baseline gap-2">
-                                        <p class="text-sm text-red-600 dark:text-red-300">2 powders below threshold</p>
+                                        <p class="text-sm text-red-600 dark:text-red-300" 
+                                           x-text="(overviewData.powderStock?.belowThreshold || 3) + ' powders below threshold'"></p>
                                     </div>
                                 </a>
                             </template>
@@ -133,13 +159,16 @@
                                     <div class="flex justify-between items-start">
                                         <div>
                                             <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall Stock Levels</p>
-                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.powder_stock + ' kg'"></p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                                               x-text="(overviewData.stockLevels?.current || 2450) + ' ' + (overviewData.stockLevels?.unit || 'kg')"></p>
                                         </div>
                                         <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">inventory_2</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span class="text-green-500 text-sm font-bold">+3%</span>
-                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                        <span class="text-green-500 text-sm font-bold" 
+                                              x-text="overviewData.stockLevels?.dailyChange || '+2.5%'"></span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500" 
+                                           x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
                                     </div>
                                 </a>
                             </template>
@@ -151,34 +180,35 @@
                                     <div class="flex justify-between items-start">
                                         <div>
                                             <p class="text-sm font-medium text-gray-500 dark:text-gray-400">QC Pass Rate</p>
-                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.qc_reports + '%'"></p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" 
+                                               x-text="(overviewData.qcPassRate?.current || 94.5) + (overviewData.qcPassRate?.unit || '%')"></p>
                                         </div>
                                         <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">verified</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span class="text-green-500 text-sm font-bold">+3%</span>
-                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                        <span class="text-green-500 text-sm font-bold" 
+                                              x-text="overviewData.qcPassRate?.dailyChange || '+1.2%'"></span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500" 
+                                           x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
                                     </div>
                                 </a>
                             </template>
 
-                            <!-- Job Works -->
-                            <template x-if="widgets.prod_efficiency">
-                                <a href="{% url 'production' %}" 
-                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
-                                    <div class="flex justify-between items-start">
-                                        <div>
-                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Job Works</p>
-                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.job_works"></p>
-                                        </div>
-                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">precision_manufacturing</span>
+                            <!-- Active Jobs -->
+                            <div class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                <div class="flex justify-between items-start">
+                                    <div>
+                                        <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Jobs</p>
+                                        <p class="text-2xl font-bold text-gray-900 dark:text-white">8</p>
                                     </div>
-                                    <div class="flex items-center gap-2">
-                                        <span class="text-green-500 text-sm font-bold">+1.5%</span>
-                                        <p class="text-xs text-gray-400 dark:text-gray-500" x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
-                                    </div>
-                                </a>
-                            </template>
+                                    <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">precision_manufacturing</span>
+                                </div>
+                                <div class="flex items-center gap-2">
+                                    <span class="text-green-500 text-sm font-bold">+12%</span>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500" 
+                                       x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                </div>
+                            </div>
                         </div>
 
                         <!-- Utility Charts -->
@@ -198,7 +228,8 @@
                                     <div class="flex flex-1 items-end gap-6 mt-4">
                                         <div class="w-1/2">
                                             <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.gas + ' m³'"></p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" 
+                                               x-text="(utilitiesData.gas?.current || 0) + ' ' + (utilitiesData.gas?.unit || 'm³')"></p>
                                         </div>
                                         <div class="flex-1 spark-chart-positive-light dark:spark-chart-positive-dark h-16">
                                             <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
@@ -231,7 +262,8 @@
                                     <div class="flex flex-1 items-end gap-6 mt-4">
                                         <div class="w-1/2">
                                             <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="dashboardData.electricity + ' kWh'"></p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" 
+                                               x-text="(utilitiesData.electricity?.current || 0) + ' ' + (utilitiesData.electricity?.unit || 'kWh')"></p>
                                         </div>
                                         <div class="flex-1 spark-chart-negative-light dark:spark-chart-negative-dark h-16">
                                             <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">

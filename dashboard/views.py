@@ -14,6 +14,9 @@ from .serializers import (
 from django.contrib.auth.decorators import login_required
 from django.db.models import F, Sum, Count, Avg
 from datetime import date, datetime, timedelta
+from django.http import JsonResponse
+from django.utils import timezone
+
 
 # Create your views here.
 
@@ -116,6 +119,133 @@ def dashboard_data(request):
         "user_role": user_role
     }
     return Response(data)
+
+@api_view(['GET'])
+def executive_overview_data(request):
+    """API endpoint for executive overview data with proper calculations"""
+    try:
+        # Get total powder stock
+        total_stock = Powder.objects.aggregate(total=Sum('current_stock'))['total'] or 0
+        
+        # Get powders below threshold
+        critical_powders = Powder.objects.filter(current_stock__lte=F('min_level')).count()
+        
+        # Get latest QC pass rate from actual QC reports
+        total_qc_reports = QCReport.objects.count()
+        passed_qc_reports = QCReport.objects.filter(result='passed').count()
+        qc_pass_rate = (passed_qc_reports / total_qc_reports * 100) if total_qc_reports > 0 else 0
+        
+        # Get today's utility data - use filter().first() to avoid multiple objects error
+        today = date.today()
+        utility_data = UtilityData.objects.filter(date=today).first()
+        
+        if utility_data:
+            gas_consumption = utility_data.gas_consumption
+            electricity_usage = utility_data.electricity_usage
+        else:
+            gas_consumption = 0
+            electricity_usage = 0
+        
+        data = {
+            'powderStock': {
+                'status': "Critical Low" if critical_powders > 0 else "Normal",
+                'belowThreshold': critical_powders
+            },
+            'stockLevels': {
+                'current': total_stock,
+                'unit': 'kg',
+                'dailyChange': "+3%"  # You can implement actual calculation later
+            },
+            'qcPassRate': {
+                'current': round(qc_pass_rate, 1),
+                'unit': '%',
+                'dailyChange': "+3%"  # You can implement actual calculation later
+            },
+            'utilities': {
+                'gas': {
+                    'current': gas_consumption,
+                    'unit': 'm³'
+                },
+                'electricity': {
+                    'current': electricity_usage,
+                    'unit': 'kWh'
+                }
+            }
+        }
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def utilities_data(request):
+    """API endpoint for utilities data"""
+    try:
+        # Get today's utility data - use filter().first() to avoid multiple objects error
+        today = date.today()
+        utility_data = UtilityData.objects.filter(date=today).first()
+        
+        if utility_data:
+            gas_consumption = utility_data.gas_consumption
+            electricity_usage = utility_data.electricity_usage
+            water_usage = utility_data.water_usage
+        else:
+            gas_consumption = 0
+            electricity_usage = 0
+            water_usage = 0
+        
+        data = {
+            'gas': {
+                'current': gas_consumption,
+                'unit': 'm³'
+            },
+            'electricity': {
+                'current': electricity_usage,
+                'unit': 'kWh'
+            },
+            'water': {
+                'current': water_usage,
+                'unit': 'm³'
+            }
+        }
+        return JsonResponse(data)
+    except Exception as e:
+        return JsonResponse({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+def add_utility_consumption(request):
+    """API endpoint to add utility consumption data"""
+    if request.method == 'POST':
+        try:
+            # Get or create today's utility data using update_or_create to handle duplicates
+            today = date.today()
+            
+            # Use update_or_create to handle existing dates properly
+            utility_data, created = UtilityData.objects.update_or_create(
+                date=today,
+                defaults={
+                    'gas_consumption': float(request.data.get('gas_consumption', 0)),
+                    'electricity_usage': float(request.data.get('electricity_usage', 0)),
+                    'water_usage': float(request.data.get('water_usage', 0)),
+                    'powder_consumption': float(request.data.get('powder_consumption', 0)),
+                    'powder_type': request.data.get('powder_type', '')
+                }
+            )
+            
+            return JsonResponse({
+                'success': True, 
+                'message': 'Utility data updated successfully!',
+                'data': {
+                    'gas': utility_data.gas_consumption,
+                    'electricity': utility_data.electricity_usage,
+                    'water': utility_data.water_usage,
+                    'powder': utility_data.powder_consumption
+                }
+            })
+            
+        except Exception as e:
+            return JsonResponse({'success': False, 'error': str(e)})
+    
+    return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
 # Add these new views for utilities analytics
 @api_view(['GET'])

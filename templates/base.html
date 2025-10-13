@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Metamorph Metals{% endblock %}</title>
+    {% load static %}
     <link href="https://fonts.googleapis.com" rel="preconnect"/>
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
     <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap" rel="stylesheet"/>
@@ -247,5 +248,6 @@
     </script>
     
     {% block extra_scripts %}{% endblock %}
+    <script src="{% static 'js/dataService.js' %}"></script>
 </body>
 </html>

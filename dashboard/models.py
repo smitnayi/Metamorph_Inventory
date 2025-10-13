@@ -96,8 +96,11 @@ class UtilityData(models.Model):
     gas_consumption = models.FloatField(default=0)  # m³
     electricity_usage = models.FloatField(default=0)  # kWh
     water_usage = models.FloatField(default=0)  # m³
+    powder_consumption = models.FloatField(default=0)  # kg
+    powder_type = models.CharField(max_length=100, blank=True)
     created_at = models.DateTimeField(auto_now_add=True)
     
+    # Add unique constraint to prevent duplicates for the same date
     class Meta:
         unique_together = ['date']
     
