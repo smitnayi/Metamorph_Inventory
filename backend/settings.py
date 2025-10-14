@@ -129,9 +129,43 @@ STATIC_ROOT = BASE_DIR / 'staticfiles'
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+# settings.py
+AUTH_USER_MODEL = 'users.CustomUser'
+
+# Add permissions
 REST_FRAMEWORK = {
-    'DEFAULT_AUTHENTICATION_CLASSES': [],
-    'DEFAULT_PERMISSION_CLASSES': [],
+    'DEFAULT_PERMISSION_CLASSES': [
+        'rest_framework.permissions.IsAuthenticated',
+    ],
+    'DEFAULT_AUTHENTICATION_CLASSES': [
+        'rest_framework_simplejwt.authentication.JWTAuthentication',
+        'rest_framework.authentication.SessionAuthentication',
+    ],
+}
+
+# Role-based permissions
+USER_PERMISSIONS = {
+    'admin': {
+        'can_view_dashboard': True,
+        'can_edit_utilities': True,
+        'can_manage_users': True,
+        'can_view_reports': True,
+        'can_manage_settings': True,
+    },
+    'operator': {
+        'can_view_dashboard': True,
+        'can_edit_utilities': True,
+        'can_manage_users': False,
+        'can_view_reports': True,
+        'can_manage_settings': False,
+    },
+    'viewer': {
+        'can_view_dashboard': True,
+        'can_edit_utilities': False,
+        'can_manage_users': False,
+        'can_view_reports': True,
+        'can_manage_settings': False,
+    }
 }
 
 # Simple JWT settings

@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Dashboard - Metamorph Metals{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function viewerDashboardComponent() {
+        return {
+            ...dashboardComponent(), // Inherit base functionality
+            // Viewer-specific restrictions
+            canEdit: false,
+            canCustomize: false,
+            
+            async initViewerDashboard() {
+                await this.initDashboard();
+                // Disable editing features for viewers
+                this.customizing = false;
+                this.widgets = {
+                    powder_alerts: true,
+                    stock_levels: true,
+                    gas: true,
+                    electricity: true,
+                    qc: true,
+                    recent_powders: true,
+                    urgent_tasks: true
+                };
+            }
+        };
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col">
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
+              x-data="viewerDashboardComponent()" 
+              x-init="initViewerDashboard()">
+            
+            <div class="mx-auto max-w-7xl">
+                <!-- Viewer Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Dashboard</h2>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1">Read-only access to system data</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300 rounded-full text-sm font-semibold">
+                            Viewer Access
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Include Base Dashboard Content (Read-only) -->
+                {% include "dashboard/partials/base_dashboard_content.html" %}
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

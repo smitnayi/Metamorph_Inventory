@@ -21,31 +21,122 @@
             overviewData: {},
             utilitiesData: {},
             loading: true,
+            // Role-based properties
+            userRole: '{{ user.userprofile.role }}',
+            canEditUtilities: {{ user.userprofile.role == 'admin' or user.userprofile.role == 'operator' | yesno: "true,false" }
+    },
+    canCustomizeWidgets: { { user.userprofile.role == 'admin' | yesno: "true,false" } },
+    productionTasks: [],
+        systemMetrics: { },
 
             async initDashboard() {
-                try {
-                    console.log('Initializing dashboard...');
-                    const data = await dataService.updateDashboardData();
-                    console.log('Dashboard data loaded:', data);
-                    this.overviewData = data.overview;
-                    this.utilitiesData = data.utilities;
-                } catch (error) {
-                    console.error('Error initializing dashboard:', error);
-                    // Set fallback data
-                    this.overviewData = {
-                        powderStock: { status: 'Error', belowThreshold: 0 },
-                        stockLevels: { current: 0, unit: 'kg', dailyChange: '+0%' },
-                        qcPassRate: { current: 0, unit: '%', dailyChange: '+0%' }
-                    };
-                    this.utilitiesData = {
-                        gas: { current: 0, unit: 'm³' },
-                        electricity: { current: 0, unit: 'kWh' }
-                    };
-                } finally {
-                    this.loading = false;
-                    console.log('Dashboard loading complete');
-                }
+        try {
+            console.log('Initializing dashboard...');
+            const data = await dataService.updateDashboardData();
+            console.log('Dashboard data loaded:', data);
+            this.overviewData = data.overview;
+            this.utilitiesData = data.utilities;
+
+            // Load role-specific data
+            if (this.userRole === 'admin' || this.userRole === 'operator') {
+                await this.loadOperatorData();
             }
+            if (this.userRole === 'admin') {
+                await this.loadAdminData();
+            }
+
+        } catch (error) {
+            console.error('Error initializing dashboard:', error);
+            // Set fallback data
+            this.overviewData = {
+                powderStock: { status: 'Error', belowThreshold: 0 },
+                stockLevels: { current: 0, unit: 'kg', dailyChange: '+0%' },
+                qcPassRate: { current: 0, unit: '%', dailyChange: '+0%' }
+            };
+            this.utilitiesData = {
+                gas: { current: 0, unit: 'm³' },
+                electricity: { current: 0, unit: 'kWh' }
+            };
+        } finally {
+            this.loading = false;
+            console.log('Dashboard loading complete');
+        }
+    },
+
+            async loadOperatorData() {
+        try {
+            const operatorData = await dataService.getOperatorData();
+            this.productionTasks = operatorData.productionTasks || [];
+        } catch (error) {
+            console.error('Error loading operator data:', error);
+        }
+    },
+
+            async loadAdminData() {
+        try {
+            const adminData = await dataService.getAdminMetrics();
+            this.systemMetrics = adminData.systemMetrics || {};
+        } catch (error) {
+            console.error('Error loading admin data:', error);
+        }
+    },
+
+            // Operator actions
+            async updateProductionStatus(taskId, status) {
+        if (!this.canEditUtilities) {
+            alert('You do not have permission to perform this action');
+            return;
+        }
+
+        try {
+            await dataService.updateProductionStatus(taskId, status);
+            // Refresh tasks
+            await this.loadOperatorData();
+        } catch (error) {
+            console.error('Error updating production status:', error);
+        }
+    },
+
+            async submitUtilityReading(type, value) {
+        if (!this.canEditUtilities) {
+            alert('You do not have permission to edit utility data');
+            return;
+        }
+
+        if (!value || value <= 0) {
+            alert('Please enter a valid value');
+            return;
+        }
+
+        try {
+            await dataService.submitUtilityReading(type, value);
+            alert('Utility reading submitted successfully');
+            // Refresh utility data
+            const data = await dataService.updateDashboardData();
+            this.utilitiesData = data.utilities;
+        } catch (error) {
+            console.error('Error submitting utility reading:', error);
+            alert('Error submitting utility reading');
+        }
+    },
+
+            // Admin actions
+            async performSystemAction(action) {
+        if (this.userRole !== 'admin') {
+            alert('Admin access required');
+            return;
+        }
+
+        if (!confirm(`Are you sure you want to ${action}?`)) return;
+
+        try {
+            await dataService.performSystemAction(action);
+            alert(`${action} completed successfully`);
+        } catch (error) {
+            console.error(`Error performing ${action}:`, error);
+            alert(`Error performing ${action}`);
+        }
+    }
         };
     }
 </script>
@@ -54,11 +145,178 @@
 {% block content %}
 <div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
     <div class="flex flex-col">
-        <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
-              x-data="dashboardComponent()" 
-              x-init="initDashboard()">
-            
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" x-data="dashboardComponent()" x-init="initDashboard()">
+
             <div class="mx-auto max-w-7xl">
+                <!-- Role-based Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">
+                            {% if user.userprofile.role == 'admin' %}Admin Dashboard
+                            {% elif user.userprofile.role == 'operator' %}Operator Dashboard
+                            {% else %}Dashboard{% endif %}
+                        </h2>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1">
+                            {% if user.userprofile.role == 'admin' %}Full system access and management
+                            {% elif user.userprofile.role == 'operator' %}Production and utility management access
+                            {% else %}Read-only access to system data{% endif %}
+                        </p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <!-- Role Badge -->
+                        <span class="px-3 py-1 rounded-full text-sm font-semibold 
+                            {% if user.userprofile.role == 'admin' %}bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300
+                            {% elif user.userprofile.role == 'operator' %}bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300
+                            {% else %}bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-300{% endif %}">
+                            {{ user.userprofile.get_role_display }} Access
+                        </span>
+
+                        <!-- Admin Quick Actions -->
+                        {% if user.userprofile.role == 'admin' %}
+                        <button onclick="window.location.href='{% url 'user_management' %}'"
+                            class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-primary/90">
+                            <span class="material-symbols-outlined mr-2">group</span>
+                            Manage Users
+                        </button>
+                        {% endif %}
+
+                        <!-- Operator Quick Actions -->
+                        {% if user.userprofile.role == 'operator' %}
+                        <button onclick="window.location.href='{% url 'production' %}'"
+                            class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-primary/90">
+                            <span class="material-symbols-outlined mr-2">precision_manufacturing</span>
+                            Production Control
+                        </button>
+                        {% endif %}
+                    </div>
+                </div>
+
+                <!-- Admin Specific Widgets -->
+                {% if user.userprofile.role == 'admin' %}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- System Health -->
+                    <div
+                        class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">System Health</h3>
+                        <div class="space-y-3">
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-400">Database Status</span>
+                                <span
+                                    class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-semibold">Healthy</span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-400">Active Users</span>
+                                <span class="text-gray-900 dark:text-white font-semibold"
+                                    x-text="systemMetrics.activeUsers || 12"></span>
+                            </div>
+                            <div class="flex justify-between items-center">
+                                <span class="text-gray-600 dark:text-gray-400">System Uptime</span>
+                                <span class="text-gray-900 dark:text-white font-semibold">99.8%</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Quick Actions -->
+                    <div
+                        class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
+                        <div class="grid grid-cols-2 gap-3">
+                            <button @click="performSystemAction('backup')"
+                                class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                <span class="material-symbols-outlined text-primary">backup</span>
+                                <span class="text-sm font-medium">Backup</span>
+                            </button>
+                            <button @click="performSystemAction('generate_reports')"
+                                class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                <span class="material-symbols-outlined text-primary">analytics</span>
+                                <span class="text-sm font-medium">Reports</span>
+                            </button>
+                            <button onclick="window.location.href='{% url 'system_settings' %}'"
+                                class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                <span class="material-symbols-outlined text-primary">settings</span>
+                                <span class="text-sm font-medium">Settings</span>
+                            </button>
+                            <button @click="performSystemAction('system_check')"
+                                class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                <span class="material-symbols-outlined text-primary">security</span>
+                                <span class="text-sm font-medium">Security</span>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Operator Specific Widgets -->
+                {% if user.userprofile.role == 'operator' or user.userprofile.role == 'admin' %}
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Production Tasks -->
+                    <div
+                        class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">
+                            {% if user.userprofile.role == 'admin' %}Production Overview
+                            {% else %}My Production Tasks{% endif %}
+                        </h3>
+                        <div class="space-y-3">
+                            <template x-for="task in productionTasks" :key="task.id">
+                                <div
+                                    class="flex justify-between items-center p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60">
+                                    <div>
+                                        <p class="font-medium text-gray-900 dark:text-white" x-text="task.name"></p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="task.line"></p>
+                                    </div>
+                                    {% if user.userprofile.role == 'operator' %}
+                                    <button @click="updateProductionStatus(task.id, 'completed')"
+                                        class="px-3 py-1 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Complete
+                                    </button>
+                                    {% endif %}
+                                </div>
+                            </template>
+                            <template x-if="productionTasks.length === 0">
+                                <p class="text-gray-500 dark:text-gray-400 text-center py-4">No active production tasks
+                                </p>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Quick Utility Entry -->
+                    <div
+                        class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Utility Entry</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gas
+                                    Consumption (m³)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" x-model="newGasReading"
+                                        class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm"
+                                        placeholder="Enter gas reading">
+                                    <button @click="submitUtilityReading('gas', newGasReading); newGasReading = ''"
+                                        class="px-4 py-2 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Submit
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label
+                                    class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Electricity
+                                    Usage (kWh)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" x-model="newElectricityReading"
+                                        class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm"
+                                        placeholder="Enter electricity reading">
+                                    <button
+                                        @click="submitUtilityReading('electricity', newElectricityReading); newElectricityReading = ''"
+                                        class="px-4 py-2 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Submit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
                 <!-- Loading State -->
                 <template x-if="loading">
                     <div class="flex justify-center items-center py-12">
@@ -71,142 +329,172 @@
                 <template x-if="!loading">
                     <div class="fade-in">
                         <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
-                            <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Executive Overview</h2>
+                            <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Executive
+                                Overview</h2>
                             <div class="flex items-center gap-2">
-                                <div class="flex items-center gap-1 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-1">
-                                    <button :class="{'bg-primary text-black': timePeriod === 'Last 24 Hours', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last 24 Hours'}" 
-                                            @click="timePeriod = 'Last 24 Hours'" 
-                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">24h</button>
-                                    <button :class="{'bg-primary text-black': timePeriod === 'Last Week', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Week'}" 
-                                            @click="timePeriod = 'Last Week'" 
-                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">7d</button>
-                                    <button :class="{'bg-primary text-black': timePeriod === 'Last Month', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Month'}" 
-                                            @click="timePeriod = 'Last Month'" 
-                                            class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">30d</button>
+                                <div
+                                    class="flex items-center gap-1 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-1">
+                                    <button
+                                        :class="{'bg-primary text-black': timePeriod === 'Last 24 Hours', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last 24 Hours'}"
+                                        @click="timePeriod = 'Last 24 Hours'"
+                                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">24h</button>
+                                    <button
+                                        :class="{'bg-primary text-black': timePeriod === 'Last Week', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Week'}"
+                                        @click="timePeriod = 'Last Week'"
+                                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">7d</button>
+                                    <button
+                                        :class="{'bg-primary text-black': timePeriod === 'Last Month', 'text-gray-600 dark:text-gray-300': timePeriod !== 'Last Month'}"
+                                        @click="timePeriod = 'Last Month'"
+                                        class="px-3 py-1.5 text-sm font-bold rounded-md transition-colors">30d</button>
                                 </div>
-                                <button @click="customizing = !customizing" 
+
+                                <!-- Hide customize button for viewers and operators -->
+                                <template x-if="canCustomizeWidgets">
+                                    <button @click="customizing = !customizing"
                                         class="inline-flex items-center justify-center rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 px-4 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 transition-colors hover:bg-gray-100/10 dark:hover:bg-white/10">
-                                    <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">edit</span>
-                                    <span x-text="customizing ? 'Done' : 'Customize'"></span>
-                                </button>
+                                        <span class="material-symbols-outlined mr-2 -ml-1 h-5 w-5">edit</span>
+                                        <span x-text="customizing ? 'Done' : 'Customize'"></span>
+                                    </button>
+                                </template>
                             </div>
                         </div>
 
-                        <!-- Customize Widgets Panel -->
-                        <div class="mb-6 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5" 
-                             x-cloak 
-                             x-show="customizing">
-                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Customize Widgets</h3>
-                            <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
-                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
-                                           type="checkbox" 
-                                           x-model="widgets.powder_alerts"/>
-                                    <span class="text-gray-800 dark:text-gray-200">Powder Stock Alerts</span>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
-                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
-                                           type="checkbox" 
-                                           x-model="widgets.stock_levels"/>
-                                    <span class="text-gray-800 dark:text-gray-200">Overall Stock Levels</span>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
-                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
-                                           type="checkbox" 
-                                           x-model="widgets.gas"/>
-                                    <span class="text-gray-800 dark:text-gray-200">Gas Consumption</span>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
-                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
-                                           type="checkbox" 
-                                           x-model="widgets.electricity"/>
-                                    <span class="text-gray-800 dark:text-gray-200">Electricity Usage</span>
-                                </label>
-                                <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
-                                    <input class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary" 
-                                           type="checkbox" 
-                                           x-model="widgets.qc"/>
-                                    <span class="text-gray-800 dark:text-gray-200">QC Pass Rate</span>
-                                </label>
+                        <!-- Customize Widgets Panel (Admin only) -->
+                        <template x-if="canCustomizeWidgets">
+                            <div class="mb-6 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5"
+                                x-cloak x-show="customizing">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Customize Widgets</h3>
+                                <div class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+                                    <label
+                                        class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                        <input
+                                            class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary"
+                                            type="checkbox" x-model="widgets.powder_alerts" />
+                                        <span class="text-gray-800 dark:text-gray-200">Powder Stock Alerts</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                        <input
+                                            class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary"
+                                            type="checkbox" x-model="widgets.stock_levels" />
+                                        <span class="text-gray-800 dark:text-gray-200">Overall Stock Levels</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                        <input
+                                            class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary"
+                                            type="checkbox" x-model="widgets.gas" />
+                                        <span class="text-gray-800 dark:text-gray-200">Gas Consumption</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                        <input
+                                            class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary"
+                                            type="checkbox" x-model="widgets.electricity" />
+                                        <span class="text-gray-800 dark:text-gray-200">Electricity Usage</span>
+                                    </label>
+                                    <label
+                                        class="flex items-center space-x-3 cursor-pointer p-3 rounded-lg hover:bg-gray-200/10 dark:hover:bg-gray-700/50">
+                                        <input
+                                            class="form-checkbox h-5 w-5 rounded bg-gray-300 dark:bg-gray-600 border-gray-400 dark:border-gray-500 text-primary focus:ring-primary"
+                                            type="checkbox" x-model="widgets.qc" />
+                                        <span class="text-gray-800 dark:text-gray-200">QC Pass Rate</span>
+                                    </label>
+                                </div>
                             </div>
-                        </div>
+                        </template>
 
+                        <!-- Rest of your existing dashboard content remains the same -->
                         <!-- Widget Grid -->
                         <div class="grid grid-cols-1 gap-6 sm:grid-cols-2 lg:grid-cols-4">
                             <!-- Powder Stock Alert -->
                             <template x-if="widgets.powder_alerts">
-                                <a href="{% url 'inventory' %}" 
-                                   class="group flex flex-col gap-4 rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5 transition-all duration-200 hover:border-red-500 dark:hover:border-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/20">
+                                <a href="{% url 'inventory' %}"
+                                    class="group flex flex-col gap-4 rounded-xl border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10 p-5 transition-all duration-200 hover:border-red-500 dark:hover:border-red-400 hover:bg-red-500/10 dark:hover:bg-red-900/20">
                                     <div class="flex justify-between items-start">
                                         <div>
-                                            <p class="text-sm font-medium text-red-600 dark:text-red-300">Powder Stock Alert</p>
-                                            <p class="text-2xl font-bold text-red-700 dark:text-red-200" 
-                                               x-text="overviewData.powderStock?.status || 'Critical'"></p>
+                                            <p class="text-sm font-medium text-red-600 dark:text-red-300">Powder Stock
+                                                Alert</p>
+                                            <p class="text-2xl font-bold text-red-700 dark:text-red-200"
+                                                x-text="overviewData.powderStock?.status || 'Critical'"></p>
                                         </div>
-                                        <span class="material-symbols-outlined text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors duration-200">warning</span>
+                                        <span
+                                            class="material-symbols-outlined text-red-500 dark:text-red-400 group-hover:text-red-600 dark:group-hover:text-red-300 transition-colors duration-200">warning</span>
                                     </div>
                                     <div class="flex items-baseline gap-2">
-                                        <p class="text-sm text-red-600 dark:text-red-300" 
-                                           x-text="(overviewData.powderStock?.belowThreshold || 3) + ' powders below threshold'"></p>
+                                        <p class="text-sm text-red-600 dark:text-red-300"
+                                            x-text="(overviewData.powderStock?.belowThreshold || 3) + ' powders below threshold'">
+                                        </p>
                                     </div>
                                 </a>
                             </template>
 
                             <!-- Overall Stock Levels -->
                             <template x-if="widgets.stock_levels">
-                                <a href="{% url 'inventory' %}" 
-                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                <a href="{% url 'inventory' %}"
+                                    class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
                                     <div class="flex justify-between items-start">
                                         <div>
-                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall Stock Levels</p>
-                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" 
-                                               x-text="(overviewData.stockLevels?.current || 2450) + ' ' + (overviewData.stockLevels?.unit || 'kg')"></p>
+                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall
+                                                Stock Levels</p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                                                x-text="(overviewData.stockLevels?.current || 2450) + ' ' + (overviewData.stockLevels?.unit || 'kg')">
+                                            </p>
                                         </div>
-                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">inventory_2</span>
+                                        <span
+                                            class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">inventory_2</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span class="text-green-500 text-sm font-bold" 
-                                              x-text="overviewData.stockLevels?.dailyChange || '+2.5%'"></span>
-                                        <p class="text-xs text-gray-400 dark:text-gray-500" 
-                                           x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                        <span class="text-green-500 text-sm font-bold"
+                                            x-text="overviewData.stockLevels?.dailyChange || '+2.5%'"></span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500"
+                                            x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`">
+                                        </p>
                                     </div>
                                 </a>
                             </template>
 
                             <!-- QC Pass Rate -->
                             <template x-if="widgets.qc">
-                                <a href="{% url 'qc' %}" 
-                                   class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                                <a href="{% url 'qc' %}"
+                                    class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
                                     <div class="flex justify-between items-start">
                                         <div>
-                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">QC Pass Rate</p>
-                                            <p class="text-2xl font-bold text-gray-900 dark:text-white" 
-                                               x-text="(overviewData.qcPassRate?.current || 94.5) + (overviewData.qcPassRate?.unit || '%')"></p>
+                                            <p class="text-sm font-medium text-gray-500 dark:text-gray-400">QC Pass Rate
+                                            </p>
+                                            <p class="text-2xl font-bold text-gray-900 dark:text-white"
+                                                x-text="(overviewData.qcPassRate?.current || 94.5) + (overviewData.qcPassRate?.unit || '%')">
+                                            </p>
                                         </div>
-                                        <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">verified</span>
+                                        <span
+                                            class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">verified</span>
                                     </div>
                                     <div class="flex items-center gap-2">
-                                        <span class="text-green-500 text-sm font-bold" 
-                                              x-text="overviewData.qcPassRate?.dailyChange || '+1.2%'"></span>
-                                        <p class="text-xs text-gray-400 dark:text-gray-500" 
-                                           x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                        <span class="text-green-500 text-sm font-bold"
+                                            x-text="overviewData.qcPassRate?.dailyChange || '+1.2%'"></span>
+                                        <p class="text-xs text-gray-400 dark:text-gray-500"
+                                            x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`">
+                                        </p>
                                     </div>
                                 </a>
                             </template>
 
                             <!-- Active Jobs -->
-                            <div class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
+                            <div
+                                class="group flex flex-col gap-4 rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5 transition-all duration-200 hover:border-primary/50 dark:hover:border-primary/80 hover:bg-gray-100/5 dark:hover:bg-white/5">
                                 <div class="flex justify-between items-start">
                                     <div>
                                         <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Jobs</p>
                                         <p class="text-2xl font-bold text-gray-900 dark:text-white">8</p>
                                     </div>
-                                    <span class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">precision_manufacturing</span>
+                                    <span
+                                        class="material-symbols-outlined text-gray-400 dark:text-gray-500 group-hover:text-primary transition-colors duration-200">precision_manufacturing</span>
                                 </div>
                                 <div class="flex items-center gap-2">
                                     <span class="text-green-500 text-sm font-bold">+12%</span>
-                                    <p class="text-xs text-gray-400 dark:text-gray-500" 
-                                       x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`"></p>
+                                    <p class="text-xs text-gray-400 dark:text-gray-500"
+                                        x-text="`vs last ${timePeriod === 'Last 24 Hours' ? 'day' : timePeriod === 'Last Week' ? 'week' : 'month'}`">
+                                    </p>
                                 </div>
                             </div>
                         </div>
@@ -215,7 +503,8 @@
                         <div class="mt-8 grid grid-cols-1 gap-6 lg:grid-cols-2">
                             <!-- Gas Consumption -->
                             <template x-if="widgets.gas">
-                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                                <div
+                                    class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
                                     <div class="flex items-start justify-between">
                                         <div>
                                             <h3 class="font-bold text-gray-900 dark:text-white">Gas Consumption</h3>
@@ -228,15 +517,25 @@
                                     <div class="flex flex-1 items-end gap-6 mt-4">
                                         <div class="w-1/2">
                                             <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" 
-                                               x-text="(utilitiesData.gas?.current || 0) + ' ' + (utilitiesData.gas?.unit || 'm³')"></p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white"
+                                                x-text="(utilitiesData.gas?.current || 0) + ' ' + (utilitiesData.gas?.unit || 'm³')">
+                                            </p>
                                         </div>
-                                        <div class="flex-1 spark-chart-positive-light dark:spark-chart-positive-dark h-16">
-                                            <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667V100H0V72.6667Z" fill="url(#paint0_linear_spark_positive)"></path>
-                                                <path d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                                        <div
+                                            class="flex-1 spark-chart-positive-light dark:spark-chart-positive-dark h-16">
+                                            <svg fill="none" height="100%" preserveAspectRatio="none"
+                                                viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667V100H0V72.6667Z"
+                                                    fill="url(#paint0_linear_spark_positive)"></path>
+                                                <path
+                                                    d="M0 72.6667C18.1538 72.6667 18.1538 14 36.3077 14C54.4615 14 54.4615 27.3333 72.6154 27.3333C90.7692 27.3333 90.7692 62 108.923 62C127.077 62 127.077 22 145.231 22C163.385 22 163.385 67.3333 181.538 67.3333C199.692 67.3333 199.692 40.6667 217.846 40.6667C236 40.6667 236 30 254.154 30C272.308 30 272.308 80.6667 290.462 80.6667C308.615 80.6667 308.615 99.3333 326.769 99.3333C344.923 99.3333 344.923 0.666667 363.077 0.666667C381.231 0.666667 381.231 54 399.385 54C417.538 54 417.538 86 435.692 86C453.846 86 453.846 16.6667 472 16.6667"
+                                                    stroke="var(--stroke-color)" stroke-linecap="round"
+                                                    stroke-width="2"></path>
                                                 <defs>
-                                                    <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_positive" x1="236" x2="236" y1="0.666667" y2="100">
+                                                    <linearGradient gradientUnits="userSpaceOnUse"
+                                                        id="paint0_linear_spark_positive" x1="236" x2="236"
+                                                        y1="0.666667" y2="100">
                                                         <stop stop-color="var(--start-color)"></stop>
                                                         <stop offset="1" stop-color="var(--end-color)"></stop>
                                                     </linearGradient>
@@ -249,7 +548,8 @@
 
                             <!-- Electricity Usage -->
                             <template x-if="widgets.electricity">
-                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                                <div
+                                    class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
                                     <div class="flex items-start justify-between">
                                         <div>
                                             <h3 class="font-bold text-gray-900 dark:text-white">Electricity Usage</h3>
@@ -262,15 +562,25 @@
                                     <div class="flex flex-1 items-end gap-6 mt-4">
                                         <div class="w-1/2">
                                             <p class="text-xs text-gray-400 dark:text-gray-500">Current</p>
-                                            <p class="text-3xl font-bold text-gray-900 dark:text-white" 
-                                               x-text="(utilitiesData.electricity?.current || 0) + ' ' + (utilitiesData.electricity?.unit || 'kWh')"></p>
+                                            <p class="text-3xl font-bold text-gray-900 dark:text-white"
+                                                x-text="(utilitiesData.electricity?.current || 0) + ' ' + (utilitiesData.electricity?.unit || 'kWh')">
+                                            </p>
                                         </div>
-                                        <div class="flex-1 spark-chart-negative-light dark:spark-chart-negative-dark h-16">
-                                            <svg fill="none" height="100%" preserveAspectRatio="none" viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333V100H0V37.3333Z" fill="url(#paint0_linear_spark_negative)"></path>
-                                                <path d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333" stroke="var(--stroke-color)" stroke-linecap="round" stroke-width="2"></path>
+                                        <div
+                                            class="flex-1 spark-chart-negative-light dark:spark-chart-negative-dark h-16">
+                                            <svg fill="none" height="100%" preserveAspectRatio="none"
+                                                viewBox="0 0 472 100" width="100%" xmlns="http://www.w3.org/2000/svg">
+                                                <path
+                                                    d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333V100H0V37.3333Z"
+                                                    fill="url(#paint0_linear_spark_negative)"></path>
+                                                <path
+                                                    d="M0 37.3333C18.1538 37.3333 18.1538 86 36.3077 86C54.4615 86 54.4615 59.3333 72.6154 59.3333C90.7692 59.3333 90.7692 7.33333 108.923 7.33333C127.077 7.33333 127.077 67.3333 145.231 67.3333C163.385 67.3333 163.385 -0.666667 181.538 -0.666667C199.692 -0.666667 199.692 39.3333 217.846 39.3333C236 39.3333 236 55.3333 254.154 55.3333C272.308 55.3333 272.308 -21.3333 290.462 -21.3333C308.615 -21.3333 308.615 -49.3333 326.769 -49.3333C344.923 -49.3333 344.923 99.3333 363.077 99.3333C381.231 99.3333 381.231 19.3333 399.385 19.3333C417.538 19.3333 417.538 -28.6667 435.692 -28.6667C453.846 -28.6667 453.846 75.3333 472 75.3333"
+                                                    stroke="var(--stroke-color)" stroke-linecap="round"
+                                                    stroke-width="2"></path>
                                                 <defs>
-                                                    <linearGradient gradientUnits="userSpaceOnUse" id="paint0_linear_spark_negative" x1="236" x2="236" y1="-49.3333" y2="100">
+                                                    <linearGradient gradientUnits="userSpaceOnUse"
+                                                        id="paint0_linear_spark_negative" x1="236" x2="236"
+                                                        y1="-49.3333" y2="100">
                                                         <stop stop-color="var(--start-color)"></stop>
                                                         <stop offset="1" stop-color="var(--end-color)"></stop>
                                                     </linearGradient>
@@ -286,22 +596,30 @@
                         <div class="mt-8 grid grid-cols-1 lg:grid-cols-3 gap-6">
                             <!-- Recent Powders -->
                             <template x-if="widgets.recent_powders">
-                                <div class="lg:col-span-2 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
-                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Recent Powders Used & Stock</h3>
-                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Overview of recently used powders and their current stock levels.</p>
+                                <div
+                                    class="lg:col-span-2 flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                                    <h3 class="text-xl font-bold text-gray-900 dark:text-white">Recent Powders Used &
+                                        Stock</h3>
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Overview of recently used
+                                        powders and their current stock levels.</p>
                                     <div class="flex-1 mt-6 flow-root">
                                         <ul class="-my-4 divide-y divide-gray-200/10 dark:divide-gray-700/50">
                                             <li class="flex items-center py-4 space-x-4">
-                                                <div class="flex-shrink-0 size-10 rounded-lg bg-gray-200/10 dark:bg-gray-700/50 flex items-center justify-center">
+                                                <div
+                                                    class="flex-shrink-0 size-10 rounded-lg bg-gray-200/10 dark:bg-gray-700/50 flex items-center justify-center">
                                                     <span class="material-symbols-outlined text-primary">grain</span>
                                                 </div>
                                                 <div class="flex-1 min-w-0">
-                                                    <p class="text-sm font-bold text-gray-900 dark:text-white truncate">Matte Black TGIC</p>
-                                                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate">P-10245</p>
+                                                    <p class="text-sm font-bold text-gray-900 dark:text-white truncate">
+                                                        Matte Black TGIC</p>
+                                                    <p class="text-sm text-gray-500 dark:text-gray-400 truncate">P-10245
+                                                    </p>
                                                 </div>
                                                 <div class="text-right">
                                                     <p class="text-sm font-bold text-gray-900 dark:text-white">52 kg</p>
-                                                    <span class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">In Stock</span>
+                                                    <span
+                                                        class="px-2 py-0.5 text-xs font-semibold rounded-full bg-green-100 dark:bg-green-900/50 text-green-800 dark:text-green-300">In
+                                                        Stock</span>
                                                 </div>
                                             </li>
                                         </ul>
@@ -311,19 +629,25 @@
 
                             <!-- Urgent Tasks -->
                             <template x-if="widgets.urgent_tasks">
-                                <div class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                                <div
+                                    class="flex flex-col rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
                                     <div class="flex items-center justify-between">
-                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Urgent Production Tasks</h3>
-                                        <a class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors" href="{% url 'production' %}">
+                                        <h3 class="text-xl font-bold text-gray-900 dark:text-white">Urgent Production
+                                            Tasks</h3>
+                                        <a class="group flex items-center gap-1 text-sm font-medium text-primary hover:text-primary/80 transition-colors"
+                                            href="{% url 'production' %}">
                                             <span>View Full Schedule</span>
-                                            <span class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
+                                            <span
+                                                class="material-symbols-outlined transition-transform group-hover:translate-x-1">arrow_forward</span>
                                         </a>
                                     </div>
-                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Pressing items needing attention.</p>
+                                    <p class="mt-1 text-sm text-gray-500 dark:text-gray-400">Pressing items needing
+                                        attention.</p>
                                     <div class="mt-6 flow-root">
                                         <ul class="-my-4 divide-y divide-gray-200/10 dark:divide-gray-700/50">
                                             <li class="py-4">
-                                                <p class="text-sm font-medium text-gray-900 dark:text-white">Line 2: Oven temperature calibration overdue.</p>
+                                                <p class="text-sm font-medium text-gray-900 dark:text-white">Line 2:
+                                                    Oven temperature calibration overdue.</p>
                                             </li>
                                         </ul>
                                     </div>

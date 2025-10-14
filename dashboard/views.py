@@ -3,10 +3,10 @@ from rest_framework import viewsets, status
 from rest_framework.decorators import api_view
 from rest_framework.response import Response
 from django.contrib.auth import authenticate, login, logout
-from django.contrib.auth.models import User
+from django.contrib.auth import get_user_model  # CHANGED: Replace User import
 from django.contrib import messages
 from rest_framework.views import APIView
-from .models import ProductionLog, UserProfile, Powder, ProductionOrder, QCReport, UtilityData
+from .models import ProductionLog, UserProfile, Powder, ProductionOrder, QCReport, UtilityData, UtilityConsumption
 from .serializers import (
     ProductionLogSerializer, UserSerializer, PowderSerializer, 
     ProductionOrderSerializer, QCReportSerializer, UtilityDataSerializer
@@ -14,9 +14,12 @@ from .serializers import (
 from django.contrib.auth.decorators import login_required
 from django.db.models import F, Sum, Count, Avg
 from datetime import date, datetime, timedelta
-from django.http import JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse
 from django.utils import timezone
+import json
 
+# CHANGED: Get the custom user model
+User = get_user_model()
 
 # Create your views here.
 
@@ -247,6 +250,62 @@ def add_utility_consumption(request):
     
     return JsonResponse({'success': False, 'error': 'Invalid request method'})
 
+@api_view(['GET'])
+def get_utility_consumption(request):
+    """API endpoint for latest utility consumption"""
+    try:
+        latest_utility = UtilityConsumption.objects.order_by('-timestamp').first()
+        
+        if latest_utility:
+            data = {
+                'gas': latest_utility.gas_consumption,
+                'electricity': latest_utility.electricity_usage,
+                'timestamp': latest_utility.timestamp.isoformat()
+            }
+        else:
+            data = {
+                'gas': 0,
+                'electricity': 0,
+                'timestamp': timezone.now().isoformat()
+            }
+            
+        return Response(data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def get_dashboard_data(request):
+    """Combined dashboard data with utility information"""
+    try:
+        # Get base dashboard data (your existing function)
+        base_data = get_base_dashboard_data()
+        
+        # Get latest utility consumption
+        latest_utility = UtilityConsumption.objects.order_by('-timestamp').first()
+        
+        # Merge data
+        dashboard_data = {
+            **base_data,
+            'gas_consumption': latest_utility.gas_consumption if latest_utility else 0,
+            'electricity_usage': latest_utility.electricity_usage if latest_utility else 0,
+            'utility_timestamp': latest_utility.timestamp.isoformat() if latest_utility else None
+        }
+        
+        return Response(dashboard_data)
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+def get_base_dashboard_data():
+    """Your existing function for base dashboard data"""
+    return {
+        'powder_stock': 2450,
+        'oc_pass_rate': 94.5,
+        'active_jobs': 8,
+        'powder_stock_alert': 'Critical',
+        'powders_below_threshold': 3,
+        # ... add other existing dashboard fields
+    }
+
 # Add these new views for utilities analytics
 @api_view(['GET'])
 def utilities_analytics(request):
@@ -453,19 +512,15 @@ def register_view(request):
         if User.objects.filter(username=username).exists():
             messages.error(request, 'Username already exists')
         else:
+            # Use your CustomUser model
             user = User.objects.create_user(
                 username=username, 
                 email=email, 
                 password=password,
                 first_name=first_name,
-                last_name=last_name
+                last_name=last_name,
+                role='operator'  # Set default role
             )
-            try:
-                profile = user.userprofile
-                profile.role = 'operator'
-                profile.save()
-            except UserProfile.DoesNotExist:
-                UserProfile.objects.create(user=user, role='operator')
             
             login(request, user)
             return redirect('dashboard')
@@ -516,7 +571,7 @@ def production(request):
 @login_required
 @role_required(['admin', 'manager', 'qc'])
 def qc(request):
-    qc_reports = QCReport.objects.all().order_by('-test_date')
+    qc_reports = QCReport.objects.all().order_by('-created_at')  # CHANGED: use created_at instead of test_date
     return render(request, 'qc.html', {'qc_reports': qc_reports})
 
 @login_required
@@ -543,3 +598,208 @@ def profile_view(request):
         return redirect('profile')
     
     return render(request, 'profile.html')
+
+@login_required
+def dashboard_view(request):
+    """Main dashboard view that handles all roles"""
+    user_role = getattr(request.user, 'userprofile', None)
+    
+    if user_role:
+        role = user_role.role
+    else:
+        # Default to viewer if no profile
+        role = 'viewer'
+    
+    context = {
+        'user': request.user,
+        'user_role': role,
+    }
+    return render(request, 'dashboard.html', context)
+
+@login_required
+def admin_dashboard(request):
+    """Admin-specific dashboard"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+        return HttpResponseForbidden("You don't have permission to access this page")
+    
+    context = {
+        'user': request.user,
+    }
+    return render(request, 'dashboard.html')
+
+@login_required
+def operator_dashboard(request):
+    """Operator-specific dashboard"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role not in ['admin', 'operator']:
+        return HttpResponseForbidden("You don't have permission to access this page")
+    
+    context = {
+        'user': request.user,
+    }
+    return render(request, 'dashboard.html')
+
+@login_required
+def viewer_dashboard(request):
+    """Viewer-specific dashboard"""
+    if not request.user.is_authenticated:
+        return HttpResponseForbidden("You need to be logged in")
+    
+    context = {
+        'user': request.user,
+    }
+    return render(request, 'dashboard.html')
+
+# API Views
+@login_required
+def dashboard_data_api(request):
+    """API endpoint for dashboard data"""
+    # Get utility data from database
+    latest_utility = UtilityConsumption.objects.order_by('-timestamp').first()
+    
+    data = {
+        'overview': {
+            'powderStock': {
+                'status': 'Critical',
+                'belowThreshold': 3
+            },
+            'stockLevels': {
+                'current': 2450,
+                'unit': 'kg',
+                'dailyChange': '+2.5%'
+            },
+            'qcPassRate': {
+                'current': 94.5,
+                'unit': '%',
+                'dailyChange': '+1.2%'
+            }
+        },
+        'utilities': {
+            'gas': {
+                'current': latest_utility.gas_consumption if latest_utility else 0,
+                'unit': 'm³'
+            },
+            'electricity': {
+                'current': latest_utility.electricity_usage if latest_utility else 0,
+                'unit': 'kWh'
+            }
+        }
+    }
+    
+    return JsonResponse(data)
+
+@login_required
+def operator_data_api(request):
+    """API endpoint for operator-specific data"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role not in ['admin', 'operator']:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    data = {
+        'productionTasks': [
+            {
+                'id': 1,
+                'name': 'Line 1 - Powder Coating',
+                'line': 'Production Line 1',
+                'status': 'in_progress'
+            },
+            {
+                'id': 2,
+                'name': 'Line 2 - Quality Check',
+                'line': 'Production Line 2',
+                'status': 'pending'
+            }
+        ]
+    }
+    
+    return JsonResponse(data)
+
+@login_required
+def admin_metrics_api(request):
+    """API endpoint for admin metrics"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+        return JsonResponse({'error': 'Admin access required'}, status=403)
+    
+    data = {
+        'systemMetrics': {
+            'activeUsers': 12,
+            'systemLoad': '45%',
+            'storageUsed': '2.3/10GB'
+        }
+    }
+    
+    return JsonResponse(data)
+
+@login_required
+def update_production_status(request):
+    """Update production status (Operators and Admins only)"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role not in ['admin', 'operator']:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            task_id = data.get('task_id')
+            status = data.get('status')
+            
+            # Update task in database - add your logic here
+            print(f"Updating task {task_id} to status {status}")
+            
+            return JsonResponse({'success': True, 'message': 'Status updated'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@login_required
+def submit_utility_reading(request):
+    """Submit utility readings (Operators and Admins only)"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role not in ['admin', 'operator']:
+        return JsonResponse({'error': 'Permission denied'}, status=403)
+    
+    if request.method == 'POST':
+        try:
+            data = json.loads(request.body)
+            utility_type = data.get('type')
+            value = data.get('value')
+            
+            # Save to database
+            if utility_type == 'gas':
+                UtilityConsumption.objects.create(
+                    gas_consumption=float(value),
+                    electricity_usage=0
+                )
+            elif utility_type == 'electricity':
+                UtilityConsumption.objects.create(
+                    gas_consumption=0,
+                    electricity_usage=float(value)
+                )
+            
+            return JsonResponse({'success': True, 'message': 'Reading submitted'})
+        except Exception as e:
+            return JsonResponse({'error': str(e)}, status=400)
+    
+    return JsonResponse({'error': 'Method not allowed'}, status=405)
+
+@login_required
+def user_management_view(request):
+    """User management page (Admin only)"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+        return HttpResponseForbidden("You don't have permission to access this page")
+    
+    # Use get_user_model() to get the custom user model
+    from django.contrib.auth import get_user_model
+    User = get_user_model()
+    
+    users = User.objects.all().select_related('userprofile')
+    context = {
+        'users': users
+    }
+    # CHANGED: Use just 'user_management.html' without 'users/' prefix
+    return render(request, 'user_management.html', context)
+
+@login_required
+def system_settings_view(request):
+    """System settings page (Admin only)"""
+    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+        return HttpResponseForbidden("You don't have permission to access this page")
+    
+    return render(request, 'system_settings.html')

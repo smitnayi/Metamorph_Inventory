@@ -1,0 +1,572 @@
+{% extends "base.html" %}
+{% block title %}Admin Dashboard - Metamorph Metals{% endblock %}
+
+{% block extra_scripts %}
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script>
+    function adminDashboardComponent() {
+        return {
+            darkMode: false,
+            systemMetrics: {
+                activeUsers: 12
+            },
+            utilityData: {
+                gas: '',
+                electricity: ''
+            },
+            productionTasks: [
+                { id: 1, name: 'Calibrate Printer #3', line: 'Line 3', status: 'pending' },
+                { id: 2, name: 'Quality Check - Batch A247', line: 'Line 1', status: 'pending' },
+                { id: 3, name: 'Restock Aluminum Powder', line: 'Inventory', status: 'pending' }
+            ],
+            recentPowders: [
+                { name: 'Titanium Alloy', stock: 245, status: 'healthy' },
+                { name: 'Stainless Steel 316L', stock: 180, status: 'healthy' },
+                { name: 'Aluminum Si10Mg', stock: 42, status: 'critical' },
+                { name: 'Inconel 718', stock: 320, status: 'healthy' },
+                { name: 'Copper C18150', stock: 38, status: 'critical' }
+            ],
+            productionChart: null,
+            gasChart: null,
+            electricityChart: null,
+
+            init() {
+                this.loadCharts();
+                
+                // Check for saved theme preference
+                if (localStorage.getItem('darkMode') === 'true') {
+                    this.toggleTheme();
+                }
+
+                // Load any saved utility data
+                const savedUtilityData = localStorage.getItem('adminUtilityData');
+                if (savedUtilityData) {
+                    this.utilityData = JSON.parse(savedUtilityData);
+                }
+            },
+
+            toggleTheme() {
+                this.darkMode = !this.darkMode;
+                document.body.classList.toggle('dark', this.darkMode);
+                localStorage.setItem('darkMode', this.darkMode);
+                
+                // Reinitialize charts with new theme
+                setTimeout(() => {
+                    this.loadCharts();
+                }, 100);
+            },
+
+            saveUtilityData() {
+                if (this.utilityData.gas || this.utilityData.electricity) {
+                    // Save to localStorage
+                    localStorage.setItem('adminUtilityData', JSON.stringify(this.utilityData));
+                    
+                    // Show success message
+                    this.showNotification('Utility data saved successfully!', 'success');
+                    
+                    // Update charts with new data
+                    this.updateCharts();
+                    
+                    // Clear form
+                    this.utilityData = { gas: '', electricity: '' };
+                } else {
+                    this.showNotification('Please enter at least one utility reading.', 'error');
+                }
+            },
+
+            showNotification(message, type = 'info') {
+                // Create notification element
+                const notification = document.createElement('div');
+                notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg ${
+                    type === 'success' ? 'bg-green-500 text-white' : 
+                    type === 'error' ? 'bg-red-500 text-white' : 
+                    'bg-blue-500 text-white'
+                }`;
+                notification.textContent = message;
+                
+                document.body.appendChild(notification);
+                
+                // Remove after 3 seconds
+                setTimeout(() => {
+                    notification.remove();
+                }, 3000);
+            },
+
+            loadCharts() {
+                // Destroy existing charts if they exist
+                if (this.productionChart) {
+                    this.productionChart.destroy();
+                }
+                if (this.gasChart) {
+                    this.gasChart.destroy();
+                }
+                if (this.electricityChart) {
+                    this.electricityChart.destroy();
+                }
+
+                // Production Chart
+                const productionCtx = document.getElementById('productionChart');
+                if (productionCtx) {
+                    this.productionChart = new Chart(productionCtx.getContext('2d'), {
+                        type: 'line',
+                        data: {
+                            labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'],
+                            datasets: [{
+                                label: 'Production Volume (kg)',
+                                data: [1250, 1300, 1450, 1600, 1550, 1700, 1650, 1800, 1750, 1900, 1850, 2000],
+                                borderColor: '#38e07b',
+                                backgroundColor: 'rgba(56, 224, 123, 0.1)',
+                                tension: 0.4,
+                                fill: true,
+                                borderWidth: 2
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                },
+                                tooltip: {
+                                    mode: 'index',
+                                    intersect: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: false,
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Gas Consumption Chart
+                const gasCtx = document.getElementById('gasChart');
+                if (gasCtx) {
+                    this.gasChart = new Chart(gasCtx.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['6AM', '9AM', '12PM', '3PM', '6PM', '9PM', '12AM'],
+                            datasets: [{
+                                label: 'Gas Consumption',
+                                data: [12, 19, 15, 22, 18, 14, 8],
+                                backgroundColor: 'rgba(239, 68, 68, 0.7)',
+                                borderColor: 'rgba(239, 68, 68, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+
+                // Electricity Usage Chart
+                const electricityCtx = document.getElementById('electricityChart');
+                if (electricityCtx) {
+                    this.electricityChart = new Chart(electricityCtx.getContext('2d'), {
+                        type: 'bar',
+                        data: {
+                            labels: ['6AM', '9AM', '12PM', '3PM', '6PM', '9PM', '12AM'],
+                            datasets: [{
+                                label: 'Electricity Usage',
+                                data: [45, 62, 58, 72, 65, 48, 32],
+                                backgroundColor: 'rgba(59, 130, 246, 0.7)',
+                                borderColor: 'rgba(59, 130, 246, 1)',
+                                borderWidth: 1
+                            }]
+                        },
+                        options: {
+                            responsive: true,
+                            maintainAspectRatio: false,
+                            plugins: {
+                                legend: {
+                                    display: false
+                                }
+                            },
+                            scales: {
+                                y: {
+                                    beginAtZero: true,
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                },
+                                x: {
+                                    grid: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.1)' : 'rgba(0, 0, 0, 0.1)'
+                                    },
+                                    ticks: {
+                                        color: this.darkMode ? 'rgba(255, 255, 255, 0.7)' : 'rgba(0, 0, 0, 0.7)'
+                                    }
+                                }
+                            }
+                        }
+                    });
+                }
+            },
+
+            updateCharts() {
+                // Update gas chart with new data
+                if (this.utilityData.gas && this.gasChart) {
+                    const newGasData = this.gasChart.data.datasets[0].data.map(value => 
+                        Math.max(0, value + Math.floor(Math.random() * 10) - 3)
+                    );
+                    this.gasChart.data.datasets[0].data = newGasData;
+                    this.gasChart.update('none');
+                }
+                
+                // Update electricity chart with new data
+                if (this.utilityData.electricity && this.electricityChart) {
+                    const newElectricityData = this.electricityChart.data.datasets[0].data.map(value => 
+                        Math.max(0, value + Math.floor(Math.random() * 15) - 5)
+                    );
+                    this.electricityChart.data.datasets[0].data = newElectricityData;
+                    this.electricityChart.update('none');
+                }
+            },
+
+            performSystemAction(action) {
+                this.showNotification(`${action} action initiated...`, 'info');
+                // Simulate action completion
+                setTimeout(() => {
+                    this.showNotification(`${action} completed successfully!`, 'success');
+                }, 1500);
+            },
+
+            completeTask(taskId) {
+                const task = this.productionTasks.find(t => t.id === taskId);
+                if (task) {
+                    task.status = 'completed';
+                    this.showNotification(`Task "${task.name}" marked as completed!`, 'success');
+                }
+            },
+
+            getStockStatus(stock) {
+                if (stock < 50) return { class: 'text-red-500', label: 'Critical' };
+                if (stock < 100) return { class: 'text-yellow-500', label: 'Low' };
+                return { class: 'text-green-500', label: 'Healthy' };
+            }
+        };
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col">
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
+              x-data="adminDashboardComponent()" 
+              x-init="init()">
+            
+            <div class="mx-auto max-w-7xl">
+                <!-- Admin Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Admin Dashboard</h2>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1">Full system access and management</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-300 rounded-full text-sm font-semibold">
+                            Admin Access
+                        </span>
+                        <button onclick="window.location.href='{% url 'user_management' %}'"
+                                class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-primary/90">
+                            <span class="material-symbols-outlined mr-2">group</span>
+                            Manage Users
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Powder Stock Alert -->
+                <div class="flex items-center p-4 mb-6 rounded-lg border border-red-500/50 dark:border-red-400/50 bg-red-500/5 dark:bg-red-900/10">
+                    <span class="material-symbols-outlined text-red-500 dark:text-red-400 mr-3">warning</span>
+                    <div>
+                        <h4 class="font-semibold text-red-700 dark:text-red-300">Powder Stock Alert</h4>
+                        <p class="text-sm text-red-600 dark:text-red-400">3 powders below threshold</p>
+                    </div>
+                </div>
+
+                <!-- Key Metrics Grid -->
+                <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+                    <!-- Overall Stock Levels -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Overall Stock Levels</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">2450 kg</p>
+                            </div>
+                            <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">inventory_2</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-green-500 text-sm font-bold">+2.5%</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">vs last day</span>
+                        </div>
+                    </div>
+
+                    <!-- OC Pass Rate -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">OC Pass Rate</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">94.5%</p>
+                            </div>
+                            <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">verified</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-green-500 text-sm font-bold">+1.2%</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">vs last day</span>
+                        </div>
+                    </div>
+
+                    <!-- Active Jobs -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">Active Jobs</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">8</p>
+                            </div>
+                            <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">precision_manufacturing</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-green-500 text-sm font-bold">+12%</span>
+                            <span class="text-xs text-gray-500 dark:text-gray-400">vs last day</span>
+                        </div>
+                    </div>
+
+                    <!-- System Uptime -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-5">
+                        <div class="flex justify-between items-start">
+                            <div>
+                                <p class="text-sm font-medium text-gray-500 dark:text-gray-400">System Uptime</p>
+                                <p class="text-2xl font-bold text-gray-900 dark:text-white">99.8%</p>
+                            </div>
+                            <span class="material-symbols-outlined text-gray-400 dark:text-gray-500">monitor_heart</span>
+                        </div>
+                        <div class="flex items-center gap-2 mt-2">
+                            <span class="text-green-500 text-sm font-bold">Healthy</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Main Dashboard Grid -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <!-- Left Column -->
+                    <div class="space-y-6">
+                        <!-- System Health -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">System Health</h3>
+                            <div class="space-y-3">
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200/10 dark:border-gray-700/50">
+                                    <span class="text-gray-600 dark:text-gray-400">Database Status</span>
+                                    <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-semibold">Healthy</span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200/10 dark:border-gray-700/50">
+                                    <span class="text-gray-600 dark:text-gray-400">Active Users</span>
+                                    <span class="text-gray-900 dark:text-white font-semibold" x-text="systemMetrics.activeUsers"></span>
+                                </div>
+                                <div class="flex justify-between items-center py-2 border-b border-gray-200/10 dark:border-gray-700/50">
+                                    <span class="text-gray-600 dark:text-gray-400">System Uptime</span>
+                                    <span class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-semibold">99.8%</span>
+                                </div>
+                                <div class="flex justify-between items-center py-2">
+                                    <span class="text-gray-600 dark:text-gray-400">API Response Time</span>
+                                    <span class="text-gray-900 dark:text-white font-semibold">42ms</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Quick Actions -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Actions</h3>
+                            <div class="grid grid-cols-2 gap-3">
+                                <button @click="performSystemAction('backup')"
+                                        class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                    <span class="material-symbols-outlined text-primary">backup</span>
+                                    <span class="text-sm font-medium">Backup</span>
+                                </button>
+                                <button @click="performSystemAction('generate_reports')"
+                                        class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                    <span class="material-symbols-outlined text-primary">analytics</span>
+                                    <span class="text-sm font-medium">Reports</span>
+                                </button>
+                                <button onclick="window.location.href='{% url 'system_settings' %}'"
+                                        class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                    <span class="material-symbols-outlined text-primary">settings</span>
+                                    <span class="text-sm font-medium">Settings</span>
+                                </button>
+                                <button @click="performSystemAction('system_check')"
+                                        class="flex items-center justify-center gap-2 p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60 hover:bg-gray-100/10 dark:hover:bg-white/10 transition-colors">
+                                    <span class="material-symbols-outlined text-primary">security</span>
+                                    <span class="text-sm font-medium">Security</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Quick Utility Entry -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Utility Entry</h3>
+                            <div class="space-y-4">
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gas Consumption (m³)</label>
+                                    <input type="number" x-model="utilityData.gas" 
+                                           class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" 
+                                           placeholder="Enter gas reading">
+                                </div>
+                                <div>
+                                    <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Electricity Usage (kWh)</label>
+                                    <input type="number" x-model="utilityData.electricity" 
+                                           class="w-full rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-gray-900 dark:text-white" 
+                                           placeholder="Enter electricity reading">
+                                </div>
+                                <button @click="saveUtilityData()" 
+                                        class="w-full px-4 py-2 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                    Save Utility Data
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Middle Column -->
+                    <div class="space-y-6">
+                        <!-- Production Overview -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Production Overview</h3>
+                            <div class="chart-container" style="height: 250px;">
+                                <canvas id="productionChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Recent Powders Used & Stock -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Recent Powders Used & Stock</h3>
+                                <button class="text-sm text-primary hover:text-primary/80">View All</button>
+                            </div>
+                            <div class="space-y-3">
+                                <template x-for="powder in recentPowders" :key="powder.name">
+                                    <div class="flex justify-between items-center py-2 border-b border-gray-200/10 dark:border-gray-700/50 last:border-0">
+                                        <span class="text-gray-900 dark:text-white font-medium" x-text="powder.name"></span>
+                                        <span :class="getStockStatus(powder.stock).class" 
+                                              class="text-sm font-semibold" 
+                                              x-text="powder.stock + ' kg'"></span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Right Column -->
+                    <div class="space-y-6">
+                        <!-- Gas Consumption -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Gas Consumption</h3>
+                                <span class="text-sm text-gray-500 dark:text-gray-400">Last 24 Hours</span>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="utilityData.gas || '0'">0</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Current (m³)</p>
+                                <div class="flex items-center gap-1 text-green-500 mt-1">
+                                    <span class="text-sm font-bold">+2%</span>
+                                </div>
+                            </div>
+                            <div class="chart-container" style="height: 150px;">
+                                <canvas id="gasChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Electricity Usage -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Electricity Usage</h3>
+                                <span class="text-sm text-gray-500 dark:text-gray-400">Last 24 Hours</span>
+                            </div>
+                            <div class="mb-4">
+                                <p class="text-3xl font-bold text-gray-900 dark:text-white" x-text="utilityData.electricity || '0'">0</p>
+                                <p class="text-sm text-gray-500 dark:text-gray-400">Current (kWh)</p>
+                                <div class="flex items-center gap-1 text-green-500 mt-1">
+                                    <span class="text-sm font-bold">+2%</span>
+                                </div>
+                            </div>
+                            <div class="chart-container" style="height: 150px;">
+                                <canvas id="electricityChart"></canvas>
+                            </div>
+                        </div>
+
+                        <!-- Urgent Production Tasks -->
+                        <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                            <div class="flex justify-between items-center mb-4">
+                                <h3 class="text-lg font-bold text-gray-900 dark:text-white">Urgent Production Tasks</h3>
+                                <button class="text-sm text-primary hover:text-primary/80">View Full Schedule</button>
+                            </div>
+                            <div class="space-y-3">
+                                <template x-for="task in productionTasks" :key="task.id">
+                                    <div class="flex justify-between items-center p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60">
+                                        <div>
+                                            <p class="font-medium text-gray-900 dark:text-white" x-text="task.name"></p>
+                                            <p class="text-sm text-gray-500 dark:text-gray-400" x-text="task.line"></p>
+                                        </div>
+                                        <button @click="completeTask(task.id)" 
+                                                x-show="task.status === 'pending'"
+                                                class="px-3 py-1 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                            Complete
+                                        </button>
+                                        <span x-show="task.status === 'completed'" 
+                                              class="px-2 py-1 bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-300 rounded text-xs font-semibold">
+                                            Done
+                                        </span>
+                                    </div>
+                                </template>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}

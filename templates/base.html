@@ -127,7 +127,24 @@
             from { opacity: 0; }
             to { opacity: 1; }
         }
+
+        /* Role-specific badges */
+        .role-badge-admin {
+            background-color: #ef4444;
+            color: white;
+        }
+        
+        .role-badge-operator {
+            background-color: #3b82f6;
+            color: white;
+        }
+        
+        .role-badge-viewer {
+            background-color: #6b7280;
+            color: white;
+        }
     </style>
+    <script src="{% static 'js/dataService.js' %}"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/alpinejs@3.x.x/dist/cdn.min.js"></script>
     {% block extra_head %}{% endblock %}
 </head>
@@ -145,47 +162,73 @@
                     <nav class="hidden md:ml-8 md:flex md:space-x-6">
                         <a href="{% url 'dashboard' %}" class="nav-link {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">Dashboard</a>
                         <a href="{% url 'inventory' %}" class="nav-link {% if request.resolver_match.url_name == 'inventory' %}active{% endif %}">Inventory</a>
+                        
+                        <!-- Production - Only for Admin and Operator -->
+                        {% if user.userprofile.role == 'admin' or user.userprofile.role == 'operator' %}
                         <a href="{% url 'production' %}" class="nav-link {% if request.resolver_match.url_name == 'production' %}active{% endif %}">Production</a>
+                        {% endif %}
+                        
                         <a href="{% url 'qc' %}" class="nav-link {% if request.resolver_match.url_name == 'qc' %}active{% endif %}">QC</a>
+                        
+                        <!-- Utilities - Only for Admin and Operator -->
+                        {% if user.userprofile.role == 'admin' or user.userprofile.role == 'operator' %}
                         <a href="{% url 'utilities' %}" class="nav-link {% if request.resolver_match.url_name == 'utilities' %}active{% endif %}">Utilities</a>
+                        {% endif %}
+                        
+                        <!-- Admin Only Links -->
+                        {% if user.userprofile.role == 'admin' %}
+                        <a href="{% url 'user_management' %}" class="nav-link {% if request.resolver_match.url_name == 'user_management' %}active{% endif %}">User Management</a>
+                        <a href="{% url 'system_settings' %}" class="nav-link {% if request.resolver_match.url_name == 'system_settings' %}active{% endif %}">Settings</a>
+                        {% endif %}
                     </nav>
                 </div>
                 
                 <!-- User Menu -->
-<div class="flex items-center space-x-4">
-    <!-- Theme Toggle -->
-    <button id="theme-toggle" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
-        <span class="material-symbols-outlined dark:hidden">dark_mode</span>
-        <span class="material-symbols-outlined hidden dark:inline">light_mode</span>
-    </button>
-    
-    <!-- User Profile -->
-    <div class="relative" x-data="{ open: false }">
-        <button @click="open = !open" class="flex items-center space-x-2 rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
-            <span class="material-symbols-outlined">account_circle</span>
-            <span class="hidden md:inline">{{ user.username }}</span>
-            <span class="px-2 py-1 text-xs font-semibold rounded-full bg-primary/20 text-primary">
-                {{ user.userprofile.get_role_display }}
-            </span>
-        </button>
-        
-        <!-- Dropdown Menu -->
-        <div x-show="open" @click.away="open = false" 
-             class="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white dark:bg-gray-800 shadow-lg py-1 z-50"
-             x-cloak>
-            <div class="px-4 py-2 border-b border-gray-200/20 dark:border-gray-700/60">
-                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ user.get_full_name|default:user.username }}</p>
-                <p class="text-xs text-gray-500 dark:text-gray-400">{{ user.userprofile.get_role_display }}</p>
-            </div>
-            <a href="{% url 'profile' %}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
-                Profile Settings
-            </a>
-            <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
-                Logout
-            </a>
-        </div>
-    </div>
-</div>
+                <div class="flex items-center space-x-4">
+                    <!-- Theme Toggle -->
+                    <button id="theme-toggle" class="rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+                        <span class="material-symbols-outlined dark:hidden">dark_mode</span>
+                        <span class="material-symbols-outlined hidden dark:inline">light_mode</span>
+                    </button>
+                    
+                    <!-- User Profile -->
+                    <div class="relative" x-data="{ open: false }">
+                        <button @click="open = !open" class="flex items-center space-x-2 rounded-lg p-2 text-gray-500 hover:bg-gray-100 dark:hover:bg-gray-800">
+                            <span class="material-symbols-outlined">account_circle</span>
+                            <span class="hidden md:inline">{{ user.username }}</span>
+                            <span class="px-2 py-1 text-xs font-semibold rounded-full 
+                                {% if user.userprofile.role == 'admin' %}role-badge-admin
+                                {% elif user.userprofile.role == 'operator' %}role-badge-operator
+                                {% else %}role-badge-viewer{% endif %}">
+                                {{ user.userprofile.get_role_display }}
+                            </span>
+                        </button>
+                        
+                        <!-- Dropdown Menu -->
+                        <div x-show="open" @click.away="open = false" 
+                             class="absolute right-0 mt-2 w-48 rounded-lg border border-gray-200/20 dark:border-gray-700/60 bg-white dark:bg-gray-800 shadow-lg py-1 z-50"
+                             x-cloak>
+                            <div class="px-4 py-2 border-b border-gray-200/20 dark:border-gray-700/60">
+                                <p class="text-sm font-medium text-gray-900 dark:text-white">{{ user.get_full_name|default:user.username }}</p>
+                                <p class="text-xs text-gray-500 dark:text-gray-400">{{ user.userprofile.get_role_display }}</p>
+                            </div>
+                            <a href="{% url 'profile' %}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                Profile Settings
+                            </a>
+                            
+                            <!-- Admin Only Options -->
+                            {% if user.userprofile.role == 'admin' %}
+                            <a href="{% url 'system_settings' %}" class="block px-4 py-2 text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                System Settings
+                            </a>
+                            {% endif %}
+                            
+                            <a href="{% url 'logout' %}" class="block px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-gray-100 dark:hover:bg-gray-700">
+                                Logout
+                            </a>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </header>
@@ -201,23 +244,53 @@
                 <span class="material-symbols-outlined">inventory_2</span>
                 <span class="text-xs mt-1">Inventory</span>
             </a>
+            
+            <!-- Production - Only for Admin and Operator -->
+            {% if user.userprofile.role == 'admin' or user.userprofile.role == 'operator' %}
             <a href="{% url 'production' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'production' %}active{% endif %}">
                 <span class="material-symbols-outlined">precision_manufacturing</span>
                 <span class="text-xs mt-1">Production</span>
             </a>
+            {% endif %}
+            
             <a href="{% url 'qc' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'qc' %}active{% endif %}">
                 <span class="material-symbols-outlined">verified</span>
                 <span class="text-xs mt-1">QC</span>
             </a>
+            
+            <!-- Utilities - Only for Admin and Operator -->
+            {% if user.userprofile.role == 'admin' or user.userprofile.role == 'operator' %}
             <a href="{% url 'utilities' %}" class="mobile-nav-link {% if request.resolver_match.url_name == 'utilities' %}active{% endif %}">
                 <span class="material-symbols-outlined">bolt</span>
                 <span class="text-xs mt-1">Utilities</span>
             </a>
+            {% endif %}
         </div>
     </div>
 
     <!-- Main Content Area -->
     <main class="flex-1 overflow-y-auto p-6 lg:p-8">
+        <!-- Role-based access messages -->
+        {% if user.userprofile.role == 'viewer' %}
+        <div class="mb-4 p-4 bg-blue-100 dark:bg-blue-900/30 border border-blue-300 dark:border-blue-700 rounded-lg">
+            <div class="flex items-center">
+                <span class="material-symbols-outlined text-blue-500 mr-2">visibility</span>
+                <p class="text-blue-800 dark:text-blue-300 text-sm">
+                    <strong>Viewer Mode:</strong> You have read-only access to the dashboard.
+                </p>
+            </div>
+        </div>
+        {% elif user.userprofile.role == 'operator' %}
+        <div class="mb-4 p-4 bg-green-100 dark:bg-green-900/30 border border-green-300 dark:border-green-700 rounded-lg">
+            <div class="flex items-center">
+                <span class="material-symbols-outlined text-green-500 mr-2">engineering</span>
+                <p class="text-green-800 dark:text-green-300 text-sm">
+                    <strong>Operator Mode:</strong> You can edit utilities and production data.
+                </p>
+            </div>
+        </div>
+        {% endif %}
+        
         {% block content %}{% endblock %}
     </main>
 
@@ -248,6 +321,5 @@
     </script>
     
     {% block extra_scripts %}{% endblock %}
-    <script src="{% static 'js/dataService.js' %}"></script>
 </body>
 </html>

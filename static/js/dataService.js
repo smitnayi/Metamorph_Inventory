@@ -14,78 +14,127 @@ const dataService = {
     },
 
     // Dashboard Data
-    async updateDashboardData() {
-        try {
-            const utilities = this.getStoredUtilities();
-            const recentData = utilities.slice(-7); // Last 7 days
-            
-            // Calculate totals for last 7 days
-            const totals = recentData.reduce((acc, day) => {
-                acc.gas += day.gas_consumption || 0;
-                acc.electricity += day.electricity_usage || 0;
-                acc.water += day.water_usage || 0;
-                acc.powder += day.powder_consumption || 0;
-                return acc;
-            }, { gas: 0, electricity: 0, water: 0, powder: 0 });
+    const: dataService = {
+        async updateDashboardData() {
+            try {
+                const response = await fetch('/api/dashboard/');
+                if (response.ok) {
+                    return await response.json();
+                } else {
+                    console.error('Failed to load dashboard data');
+                    return this.getFallbackData();
+                }
+            } catch (error) {
+                console.error('Error loading dashboard data:', error);
+                return this.getFallbackData();
+            }
+        },
 
-            return {
-                overview: {
-                    totalOrders: 24,
-                    completedOrders: 12,
-                    inProgress: 8,
-                    pending: 4,
-                    efficiency: 87,
-                    powderStock: {
-                        status: 'Critical',
-                        belowThreshold: 3
+        async getOperatorData() {
+            try {
+                const response = await fetch('/api/operator-data/');
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading operator data:', error);
+            }
+            return { productionTasks: [] };
+        },
+
+        async getAdminMetrics() {
+            try {
+                const response = await fetch('/api/admin-metrics/');
+                if (response.ok) {
+                    return await response.json();
+                }
+            } catch (error) {
+                console.error('Error loading admin metrics:', error);
+            }
+            return { systemMetrics: {} };
+        },
+
+        async updateProductionStatus(taskId, status) {
+            try {
+                const response = await fetch('/api/update-production/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken()
                     },
-                    stockLevels: {
-                        current: 2450,
-                        unit: 'kg',
-                        dailyChange: '+2.5%'
+                    body: JSON.stringify({ task_id: taskId, status: status })
+                });
+                return response.ok;
+            } catch (error) {
+                console.error('Error updating production status:', error);
+                return false;
+            }
+        },
+
+        async submitUtilityReading(type, value) {
+            try {
+                const response = await fetch('/api/submit-utility/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCSRFToken()
                     },
-                    qcPassRate: {
-                        current: 94.5,
-                        unit: '%',
-                        dailyChange: '+1.2%'
-                    }
-                },
-                utilities: {
-                    gas: {
-                        current: totals.gas,
-                        unit: 'm³',
-                        dailyChange: '+2%'
+                    body: JSON.stringify({ type: type, value: parseFloat(value) })
+                });
+                return response.ok;
+            } catch (error) {
+                console.error('Error submitting utility reading:', error);
+                return false;
+            }
+        },
+
+        async performSystemAction(action) {
+            try {
+                const response = await fetch('/dashboard/api/system-action/', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'X-CSRFToken': this.getCsrfToken()
                     },
-                    electricity: {
-                        current: totals.electricity,
-                        unit: 'kWh',
-                        dailyChange: '-1%'
-                    },
-                    water: {
-                        current: totals.water,
-                        unit: 'm³',
-                        dailyChange: '+0.5%'
+                    body: JSON.stringify({
+                        action: action
+                    })
+                });
+
+                if (!response.ok) throw new Error('Network response was not ok');
+                return await response.json();
+            } catch (error) {
+                console.error('Error performing system action:', error);
+                throw error;
+            }
+        },
+
+        getCSRFToken() {
+            const name = 'csrftoken';
+            let cookieValue = null;
+            if (document.cookie && document.cookie !== '') {
+                const cookies = document.cookie.split(';');
+                for (let i = 0; i < cookies.length; i++) {
+                    const cookie = cookies[i].trim();
+                    if (cookie.substring(0, name.length + 1) === (name + '=')) {
+                        cookieValue = decodeURIComponent(cookie.substring(name.length + 1));
+                        break;
                     }
                 }
-            };
-        } catch (error) {
-            console.error('Error fetching dashboard data:', error);
-            // Return fallback data
+            }
+            return cookieValue;
+        },
+
+        getFallbackData() {
             return {
                 overview: {
-                    totalOrders: 0,
-                    completedOrders: 0,
-                    inProgress: 0,
-                    pending: 0,
-                    efficiency: 0,
-                    powderStock: { status: 'Loading...', belowThreshold: 0 },
-                    stockLevels: { current: 0, unit: 'kg', dailyChange: '+0%' },
-                    qcPassRate: { current: 0, unit: '%', dailyChange: '+0%' }
+                    powderStock: { status: 'Critical', belowThreshold: 3 },
+                    stockLevels: { current: 2450, unit: 'kg', dailyChange: '+2.5%' },
+                    qcPassRate: { current: 94.5, unit: '%', dailyChange: '+1.2%' }
                 },
                 utilities: {
-                    gas: { current: 0, unit: 'm³', dailyChange: '+0%' },
-                    electricity: { current: 0, unit: 'kWh', dailyChange: '+0%' },
-                    water: { current: 0, unit: 'm³', dailyChange: '+0%' }
+                    gas: { current: 245, unit: 'm³' },
+                    electricity: { current: 1847, unit: 'kWh' }
                 }
             };
         }
@@ -99,7 +148,7 @@ const dataService = {
             if (stored) {
                 return JSON.parse(stored);
             }
-            
+
             // Mock data
             return [
                 {
@@ -136,7 +185,7 @@ const dataService = {
                 };
                 orders.push(newOrder);
             }
-            
+
             localStorage.setItem('metamorph_production_orders', JSON.stringify(orders));
             return { success: true, id: orderData.id || Date.now() };
         } catch (error) {
@@ -164,7 +213,7 @@ const dataService = {
             if (stored) {
                 return JSON.parse(stored);
             }
-            
+
             // Mock data
             return [
                 {
@@ -196,7 +245,7 @@ const dataService = {
                 };
                 powders.push(newPowder);
             }
-            
+
             localStorage.setItem('metamorph_powders', JSON.stringify(powders));
             return { success: true, id: powderData.id || Date.now() };
         } catch (error) {
@@ -221,7 +270,7 @@ const dataService = {
     async getUtilitiesData(timePeriod = '7d') {
         try {
             let utilities = this.getStoredUtilities();
-            
+
             // If no data, create some sample data
             if (utilities.length === 0) {
                 utilities = this.generateSampleData();
@@ -267,7 +316,7 @@ const dataService = {
     generateSampleData() {
         const data = [];
         const now = new Date();
-        
+
         for (let i = 6; i >= 0; i--) {
             const date = new Date(now.getTime() - i * 24 * 60 * 60 * 1000);
             data.push({
@@ -278,7 +327,7 @@ const dataService = {
                 total_powder: Math.floor(Math.random() * 10) + 5 // 5-15 kg
             });
         }
-        
+
         return data;
     },
 
@@ -288,12 +337,12 @@ const dataService = {
             const now = new Date();
             const currentMonth = now.getMonth();
             const currentYear = now.getFullYear();
-            
+
             const thisMonthData = utilities.filter(day => {
                 const date = new Date(day.date);
                 return date.getMonth() === currentMonth && date.getFullYear() === currentYear;
             });
-            
+
             const lastMonthData = utilities.filter(day => {
                 const date = new Date(day.date);
                 const lastMonth = currentMonth === 0 ? 11 : currentMonth - 1;
@@ -324,10 +373,10 @@ const dataService = {
     async saveConsumption(consumptionData) {
         try {
             let utilities = this.getStoredUtilities();
-            
+
             // Check if entry already exists for this date
             const existingIndex = utilities.findIndex(entry => entry.date === consumptionData.date);
-            
+
             if (existingIndex !== -1) {
                 // Update existing entry
                 utilities[existingIndex] = {
@@ -351,11 +400,11 @@ const dataService = {
                 };
                 utilities.push(newEntry);
             }
-            
+
             // Sort by date and save
             utilities.sort((a, b) => new Date(a.date) - new Date(b.date));
             this.setStoredUtilities(utilities);
-            
+
             return { success: true };
         } catch (error) {
             console.error('Error saving consumption data:', error);

@@ -1,0 +1,139 @@
+{% extends "base.html" %}
+{% block title %}Operator Dashboard - Metamorph Metals{% endblock %}
+
+{% block extra_scripts %}
+<script>
+    function operatorDashboardComponent() {
+        return {
+            ...dashboardComponent(), // Inherit base functionality
+            // Operator-specific features
+            productionTasks: [],
+            canEditUtilities: true,
+            
+            async initOperatorDashboard() {
+                await this.initDashboard();
+                // Load operator-specific data
+                try {
+                    const operatorData = await dataService.getOperatorData();
+                    this.productionTasks = operatorData.productionTasks;
+                } catch (error) {
+                    console.error('Error loading operator data:', error);
+                }
+            },
+            
+            // Operator-only actions
+            async updateProductionStatus(taskId, status) {
+                try {
+                    await dataService.updateProductionStatus(taskId, status);
+                    // Refresh tasks
+                    const operatorData = await dataService.getOperatorData();
+                    this.productionTasks = operatorData.productionTasks;
+                } catch (error) {
+                    console.error('Error updating production status:', error);
+                }
+            },
+            
+            async submitUtilityReading(type, value) {
+                if (!this.canEditUtilities) {
+                    alert('You do not have permission to edit utility data');
+                    return;
+                }
+                
+                try {
+                    await dataService.submitUtilityReading(type, value);
+                    alert('Utility reading submitted successfully');
+                    // Refresh utility data
+                    this.initDashboard();
+                } catch (error) {
+                    console.error('Error submitting utility reading:', error);
+                }
+            }
+        };
+    }
+</script>
+{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-background-light dark:bg-background-dark font-display text-gray-800 dark:text-gray-200">
+    <div class="flex flex-col">
+        <main class="flex-1 overflow-y-auto p-6 lg:p-8" 
+              x-data="operatorDashboardComponent()" 
+              x-init="initOperatorDashboard()">
+            
+            <div class="mx-auto max-w-7xl">
+                <!-- Operator Header -->
+                <div class="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <div>
+                        <h2 class="text-3xl font-bold tracking-tight text-gray-900 dark:text-white">Operator Dashboard</h2>
+                        <p class="text-gray-600 dark:text-gray-400 mt-1">Production and utility management access</p>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span class="px-3 py-1 bg-blue-100 dark:bg-blue-900/30 text-blue-800 dark:text-blue-300 rounded-full text-sm font-semibold">
+                            Operator Access
+                        </span>
+                        <button onclick="window.location.href='{% url 'production' %}'" 
+                                class="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-bold text-black transition-colors hover:bg-primary/90">
+                            <span class="material-symbols-outlined mr-2">precision_manufacturing</span>
+                            Production Control
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Operator Specific Widgets -->
+                <div class="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
+                    <!-- Production Tasks -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">My Production Tasks</h3>
+                        <div class="space-y-3">
+                            <template x-for="task in productionTasks" :key="task.id">
+                                <div class="flex justify-between items-center p-3 rounded-lg border border-gray-200/20 dark:border-gray-700/60">
+                                    <div>
+                                        <p class="font-medium text-gray-900 dark:text-white" x-text="task.name"></p>
+                                        <p class="text-sm text-gray-500 dark:text-gray-400" x-text="task.line"></p>
+                                    </div>
+                                    <button @click="updateProductionStatus(task.id, 'completed')" 
+                                            class="px-3 py-1 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Complete
+                                    </button>
+                                </div>
+                            </template>
+                        </div>
+                    </div>
+
+                    <!-- Quick Utility Entry -->
+                    <div class="rounded-xl border border-gray-200/20 dark:border-gray-700/60 bg-white/5 dark:bg-black/10 p-6">
+                        <h3 class="text-lg font-bold text-gray-900 dark:text-white mb-4">Quick Utility Entry</h3>
+                        <div class="space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Gas Consumption (m³)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" x-model="newGasReading" 
+                                           class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                                    <button @click="submitUtilityReading('gas', newGasReading)" 
+                                            class="px-4 py-2 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Submit
+                                    </button>
+                                </div>
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Electricity Usage (kWh)</label>
+                                <div class="flex gap-2">
+                                    <input type="number" x-model="newElectricityReading" 
+                                           class="flex-1 rounded-lg border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 px-3 py-2 text-sm">
+                                    <button @click="submitUtilityReading('electricity', newElectricityReading)" 
+                                            class="px-4 py-2 bg-primary text-black rounded text-sm font-semibold hover:bg-primary/90 transition-colors">
+                                        Submit
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Include Base Dashboard Content -->
+                {% include "dashboard/partials/base_dashboard_content.html" %}
+            </div>
+        </main>
+    </div>
+</div>
+{% endblock %}
