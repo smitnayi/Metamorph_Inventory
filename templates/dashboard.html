@@ -22,10 +22,10 @@
             utilitiesData: {},
             loading: true,
             // Role-based properties
-            userRole: '{{ user.userprofile.role }}',
-            canEditUtilities: {{ user.userprofile.role == 'admin' or user.userprofile.role == 'operator' | yesno: "true,false" }
+            userRole: '{{ user.role }}',
+            canEditUtilities: {{ user.role == 'admin' or user.role == 'operator' | yesno: "true,false" }
     },
-    canCustomizeWidgets: { { user.userprofile.role == 'admin' | yesno: "true,false" } },
+    canCustomizeWidgets: { { user.role == 'admin' | yesno: "true,false" } },
     productionTasks: [],
         systemMetrics: { },
 

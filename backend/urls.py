@@ -14,7 +14,7 @@ urlpatterns = [
 ]
 
 # Optional: Redirect root to dashboard
-urlpatterns += [
-    path('', lambda request: redirect('dashboard/')),
-]
+# urlpatterns += [
+#     path('', lambda request: redirect('dashboard/')),
+# ]
 

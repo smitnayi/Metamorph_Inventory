@@ -93,9 +93,10 @@ class RegisterView(APIView):
 def dashboard_data(request):
     # Remove authentication check for now
     try:
-        user_role = request.user.userprofile.role if request.user.is_authenticated else 'operator'
+        user_role = request.user.role if request.user.is_authenticated else 'operator'
     except:
         user_role = 'operator'
+    
     
     total_powder_stock = sum(powder.current_stock for powder in Powder.objects.all())
     low_stock_items = Powder.objects.filter(current_stock__lte=F('min_level') * 1.2).count()
@@ -535,11 +536,7 @@ def role_required(allowed_roles=[]):
     def decorator(view_func):
         def wrapper(request, *args, **kwargs):
             if request.user.is_authenticated:
-                try:
-                    user_role = request.user.userprofile.role
-                except UserProfile.DoesNotExist:
-                    UserProfile.objects.create(user=request.user, role='operator')
-                    user_role = 'operator'
+                user_role = getattr(request.user, 'role', 'viewer')
                 
                 if user_role in allowed_roles:
                     return view_func(request, *args, **kwargs)
