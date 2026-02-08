@@ -29,66 +29,53 @@ const dataService = {
             ?.split('=')[1] || '';
     },
 
-    /* ---------------- DASHBOARD ---------------- */
+    /* ---------------- DASHBOARD CORE ---------------- */
 
-    getDashboard() {
-        return this.request('/api/dashboard/');
+    updateDashboardData() {
+        // Calls the combined dashboard data endpoint
+        return this.request('/dashboard/data/');
     },
 
-    /* ---------------- PRODUCTION ---------------- */
+    getOperatorData() {
+        return this.request('/api/operator-data/');
+    },
+
+    getAdminMetrics() {
+        return this.request('/api/admin-metrics/');
+    },
+
+    /* ---------------- ACTIONS ---------------- */
+
+    updateProductionStatus(taskId, status) {
+        return this.request('/api/update-production/', 'POST', { taskId, status });
+    },
+
+    submitUtilityReading(type, value) {
+        // dashboard.html calls with (type, value), backend expects specific fields
+        const payload = {};
+        if (type === 'gas') payload.gas_consumption = value;
+        if (type === 'electricity') payload.electricity_usage = value;
+        if (type === 'water') payload.water_usage = value;
+
+        // Use the generic submit endpoint
+        return this.request('/api/submit-utility/', 'POST', payload);
+    },
+
+    performSystemAction(action) {
+        return this.request('/api/system-action/', 'POST', { action });
+    },
+
+    /* ---------------- LEGACY / SPECIFIC (Keep if needed) ---------------- */
 
     getProductionOrders() {
         return this.request('/api/production/');
     },
 
-    createProductionOrder(data) {
-        return this.request('/api/production/', 'POST', data);
-    },
-
-    updateProductionOrder(id, data) {
-        return this.request(`/api/production/${id}/`, 'PUT', data);
-    },
-
-    deleteProductionOrder(id) {
-        return this.request(`/api/production/${id}/`, 'DELETE');
-    },
-
-    /* ---------------- POWDER INVENTORY ---------------- */
-
     getPowders() {
         return this.request('/api/powders/');
     },
 
-    addPowder(data) {
-        return this.request('/api/powders/', 'POST', data);
-    },
-
-    updatePowder(id, data) {
-        return this.request(`/api/powders/${id}/`, 'PUT', data);
-    },
-
-    deletePowder(id) {
-        return this.request(`/api/powders/${id}/`, 'DELETE');
-    },
-
-    /* ---------------- QC ---------------- */
-
     getQCReports() {
         return this.request('/api/qc/');
-    },
-
-    addQCReport(data) {
-        return this.request('/api/qc/', 'POST', data);
-    },
-
-    /* ---------------- UTILITIES ---------------- */
-
-    getUtilitiesAnalytics() {
-        return this.request('/api/utilities/analytics/');
-    },
-
-    addUtilityConsumption(data) {
-        return this.request('/api/utilities/consume/', 'POST', data);
     }
 };
-    

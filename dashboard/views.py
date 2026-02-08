@@ -779,14 +779,14 @@ def submit_utility_reading(request):
 @login_required
 def user_management_view(request):
     """User management page (Admin only)"""
-    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+    if getattr(request.user, 'role', 'viewer') != 'admin':
         return HttpResponseForbidden("You don't have permission to access this page")
-    
+        
     # Use get_user_model() to get the custom user model
     from django.contrib.auth import get_user_model
     User = get_user_model()
     
-    users = User.objects.all().select_related('userprofile')
+    users = User.objects.all().order_by('date_joined')
     context = {
         'users': users
     }
@@ -796,7 +796,7 @@ def user_management_view(request):
 @login_required
 def system_settings_view(request):
     """System settings page (Admin only)"""
-    if not hasattr(request.user, 'userprofile') or request.user.userprofile.role != 'admin':
+    if getattr(request.user, 'role', 'viewer') != 'admin':
         return HttpResponseForbidden("You don't have permission to access this page")
     
     return render(request, 'system_settings.html')
@@ -826,3 +826,95 @@ def create_admin_view(request):
         return HttpResponse(msg + " Please log in and change it immediately!")
     except Exception as e:
         return HttpResponse(f"Error creating/updating superuser: {str(e)}")
+
+@api_view(['POST'])
+def submit_utility_reading(request):
+    """API endpoint to submit utility readings"""
+    try:
+        today = date.today()
+        # Get existing data or create new
+        utility_data, created = UtilityData.objects.get_or_create(date=today)
+        
+        # Update fields if present in request
+        if 'gas_consumption' in request.data:
+            utility_data.gas_consumption = float(request.data['gas_consumption'])
+        if 'electricity_usage' in request.data:
+            utility_data.electricity_usage = float(request.data['electricity_usage'])
+        if 'water_usage' in request.data:
+            utility_data.water_usage = float(request.data['water_usage'])
+            
+        utility_data.save()
+        
+        # Also create a UtilityConsumption record for history
+        UtilityConsumption.objects.create(
+            gas_consumption=request.data.get('gas_consumption', 0),
+            electricity_usage=request.data.get('electricity_usage', 0),
+            water_usage=request.data.get('water_usage', 0),
+            timestamp=timezone.now()
+        )
+        
+        return Response({'success': True, 'message': 'Utility data saved successfully'})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def operator_data_api(request):
+    """API for operator-specific data"""
+    try:
+        # Placeholder for production tasks (can be expanded)
+        tasks = []
+        production_orders = ProductionOrder.objects.filter(status='in_progress')
+        for order in production_orders:
+            tasks.append({
+                'id': order.id,
+                'name': f"Order #{order.id} - {order.powder.name}",
+                'line': 'Line 1',  # Placeholder
+                'status': order.status
+            })
+            
+        return Response({'productionTasks': tasks})
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['GET'])
+def admin_metrics_api(request):
+    """API for admin-specific metrics"""
+    try:
+        User = get_user_model()
+        active_users = User.objects.filter(is_active=True).count()
+        return Response({
+            'systemMetrics': {
+                'activeUsers': active_users,
+                'dbStatus': 'Healthy'
+            }
+        })
+    except Exception as e:
+        return Response({'error': str(e)}, status=500)
+
+@api_view(['POST'])
+def update_production_status(request):
+    """API to update production task status"""
+    try:
+        task_id = request.data.get('taskId')
+        status = request.data.get('status')
+        
+        if task_id and status:
+            order = ProductionOrder.objects.get(id=task_id)
+            order.status = status
+            if status == 'completed':
+                order.completed_at = timezone.now()
+            order.save()
+            return Response({'success': True})
+        return Response({'success': False, 'error': 'Missing data'}, status=400)
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)
+
+@api_view(['POST'])
+def perform_system_action(request):
+    """API for system actions"""
+    try:
+        action = request.data.get('action')
+        # Placeholder for actual system actions
+        return Response({'success': True, 'message': f'Action {action} processed'})
+    except Exception as e:
+        return Response({'success': False, 'error': str(e)}, status=500)

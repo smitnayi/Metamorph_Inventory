@@ -67,4 +67,5 @@ urlpatterns = [
     path('api/orders/<str:order_id>/utilities/', views.order_utilities_detail, name='order-utilities-detail'),
     path('api/orders/<str:order_id>/update-utilities/', views.update_order_utilities, name='update-order-utilities'),
     path('setup-admin/', views.create_admin_view, name='create_admin'),
+    path('api/system-action/', views.perform_system_action, name='perform_system_action'),
 ]
