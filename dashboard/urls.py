@@ -68,4 +68,8 @@ urlpatterns = [
     path('api/orders/<str:order_id>/update-utilities/', views.update_order_utilities, name='update-order-utilities'),
     path('setup-admin/', views.create_admin_view, name='create_admin'),
     path('api/system-action/', views.perform_system_action, name='perform_system_action'),
+    path('api/submit-utility/', views.submit_utility_reading, name='submit_utility_reading'),
+    path('api/operator-data/', views.operator_data_api, name='operator_data_api'),
+    path('api/admin-metrics/', views.admin_metrics_api, name='admin_metrics_api'),
+    path('api/update-production/', views.update_production_status, name='update_production_status'),
 ]
