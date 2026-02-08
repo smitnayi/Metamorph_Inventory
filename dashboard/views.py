@@ -803,21 +803,26 @@ def system_settings_view(request):
 
 def create_admin_view(request):
     User = get_user_model()
-    if not User.objects.filter(is_superuser=True).exists():
-        try:
-            # Check if admin already exists as regular user
-            if User.objects.filter(username='admin').exists():
-                return HttpResponse("User 'admin' already exists but is not a superuser.")
-            
+    try:
+        # Get or create the admin user
+        if User.objects.filter(username='admin').exists():
+            user = User.objects.get(username='admin')
+            user.set_password('admin123')
+            user.is_staff = True
+            user.is_superuser = True
+            user.save()
+            msg = "Updated existing 'admin' user with password 'admin123' and superuser status."
+        else:
             user = User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
-            # Try to set role if using CustomUser or Profile
-            try:
-                user.role = 'admin'
-                user.save()
-            except:
-                pass
-                
-            return HttpResponse("Superuser 'admin' created with password 'admin123'. Please log in and change it immediately!")
-        except Exception as e:
-            return HttpResponse(f"Error creating superuser: {str(e)}")
-    return HttpResponse("Superuser already exists")
+            msg = "Created new superuser 'admin' with password 'admin123'."
+
+        # Try to set role if using CustomUser or Profile
+        try:
+            user.role = 'admin'
+            user.save()
+        except:
+            pass
+            
+        return HttpResponse(msg + " Please log in and change it immediately!")
+    except Exception as e:
+        return HttpResponse(f"Error creating/updating superuser: {str(e)}")
