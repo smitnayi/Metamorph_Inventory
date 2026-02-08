@@ -82,12 +82,7 @@ WSGI_APPLICATION = 'backend.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
-        conn_max_age=600
-    )
-}
+
 # Robust check: If parsing failed or produced empty/invalid config (though config raises usually),
 # we ensure we have a fallback or at least don't crash the build loop obscurely.
 # However, the previous error was an exception during config().
