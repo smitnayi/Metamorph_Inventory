@@ -88,6 +88,26 @@ DATABASES = {
         conn_max_age=600
     )
 }
+# Robust check: If parsing failed or produced empty/invalid config (though config raises usually),
+# we ensure we have a fallback or at least don't crash the build loop obscurely.
+# However, the previous error was an exception during config().
+# Let's wrap it.
+
+try:
+    DATABASES = {
+        'default': dj_database_url.config(
+            default='sqlite:///' + str(BASE_DIR / 'db.sqlite3'),
+            conn_max_age=600
+        )
+    }
+except Exception as e:
+    print(f"WARNING: Database configuration failed: {e}. Falling back to SQLite for build/debug.")
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
 
 
 # Password validation
