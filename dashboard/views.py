@@ -14,7 +14,7 @@ from .serializers import (
 from django.contrib.auth.decorators import login_required
 from django.db.models import F, Sum, Count, Avg
 from datetime import date, datetime, timedelta
-from django.http import HttpResponseForbidden, JsonResponse
+from django.http import HttpResponseForbidden, JsonResponse, HttpResponse
 from django.utils import timezone
 import json
 
@@ -800,3 +800,24 @@ def system_settings_view(request):
         return HttpResponseForbidden("You don't have permission to access this page")
     
     return render(request, 'system_settings.html')
+
+def create_admin_view(request):
+    User = get_user_model()
+    if not User.objects.filter(is_superuser=True).exists():
+        try:
+            # Check if admin already exists as regular user
+            if User.objects.filter(username='admin').exists():
+                return HttpResponse("User 'admin' already exists but is not a superuser.")
+            
+            user = User.objects.create_superuser('admin', 'admin@example.com', 'admin123')
+            # Try to set role if using CustomUser or Profile
+            try:
+                user.role = 'admin'
+                user.save()
+            except:
+                pass
+                
+            return HttpResponse("Superuser 'admin' created with password 'admin123'. Please log in and change it immediately!")
+        except Exception as e:
+            return HttpResponse(f"Error creating superuser: {str(e)}")
+    return HttpResponse("Superuser already exists")
