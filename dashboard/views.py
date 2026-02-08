@@ -569,13 +569,13 @@ def production(request):
     return render(request, 'production.html', {'production_orders': production_orders})
 
 @login_required
-@role_required(['admin', 'manager', 'qc'])
+@role_required(['admin', 'manager', 'qc', 'operator'])
 def qc(request):
     qc_reports = QCReport.objects.all().order_by('-created_at')  # CHANGED: use created_at instead of test_date
     return render(request, 'qc.html', {'qc_reports': qc_reports})
 
 @login_required
-@role_required(['admin', 'manager'])
+@role_required(['admin', 'manager', 'operator'])
 def utility(request):
     return render(request, 'utility.html')
 
