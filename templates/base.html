@@ -8,9 +8,9 @@
     {% load static %}
     <link href="https://fonts.googleapis.com" rel="preconnect" />
     <link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect" />
-    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;700&amp;display=swap"
-        rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet" />
+    <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
     <script>
         tailwind.config = {
@@ -18,17 +18,24 @@
             theme: {
                 extend: {
                     colors: {
-                        primary: "#38e07b",
-                        "background-light": "#f6f8f7",
-                        "background-dark": "#122017",
+                        primary: "#1e40af", // Industrial Blue
+                        "background-light": "#f4f4f5", // Zinc-100
+                        "background-dark": "#18181b",  // Zinc-900
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#27272a",     // Zinc-800
+                        "text-light": "#18181b",
+                        "text-dark": "#e4e4e7",
+                        "subtle-light": "#6b7280",
+                        "subtle-dark": "#a1a1aa",
                     },
                     fontFamily: {
-                        display: ["Space Grotesk", "sans-serif"],
+                        sans: ["Inter", "sans-serif"],
+                        display: ["Inter", "sans-serif"],
                     },
                     borderRadius: {
-                        DEFAULT: "0.25rem",
-                        lg: "0.5rem",
-                        xl: "0.75rem",
+                        DEFAULT: "0.5rem",
+                        lg: "0.75rem",
+                        xl: "1rem",
                         full: "9999px",
                     },
                 },
