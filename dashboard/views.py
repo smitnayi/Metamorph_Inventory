@@ -284,12 +284,27 @@ def get_dashboard_data(request):
         # Get latest utility consumption
         latest_utility = UtilityConsumption.objects.order_by('-timestamp').first()
         
+        # Calculate Total Inventory Value
+        total_value = Powder.objects.aggregate(
+            total_value=Sum(F('current_stock') * F('price_per_kg'))
+        )['total_value'] or 0
+
+        # Recent Activity (mix of logs and orders for now, or just orders)
+        recent_activity = ProductionOrder.objects.all().order_by('-created_at')[:5].values(
+            'product_name', 'status', 'quantity', 'created_at', 'order_id'
+        )
+
         # Merge data
         dashboard_data = {
             **base_data,
+            'total_inventory_value': total_value,
             'gas_consumption': latest_utility.gas_consumption if latest_utility else 0,
             'electricity_usage': latest_utility.electricity_usage if latest_utility else 0,
-            'utility_timestamp': latest_utility.timestamp.isoformat() if latest_utility else None
+            'utility_timestamp': latest_utility.timestamp.isoformat() if latest_utility else None,
+            'recent_activity': list(recent_activity),
+            # Mock data for charts if no real historical data is easily available
+            'monthly_usage': [65, 59, 80, 81, 56, 55, 40],
+            'chart_labels': ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
         }
         
         return Response(dashboard_data)
@@ -298,13 +313,13 @@ def get_dashboard_data(request):
 
 def get_base_dashboard_data():
     """Your existing function for base dashboard data"""
+    total_stock = Powder.objects.aggregate(total=Sum('current_stock'))['total'] or 0
     return {
-        'powder_stock': 2450,
-        'oc_pass_rate': 94.5,
-        'active_jobs': 8,
-        'powder_stock_alert': 'Critical',
-        'powders_below_threshold': 3,
-        # ... add other existing dashboard fields
+        'powder_stock': total_stock,
+        'oc_pass_rate': 94.5, # Keep hardcoded if calculation is complex or missing data
+        'active_jobs': ProductionOrder.objects.filter(status='in_progress').count(),
+        'powder_stock_alert': 'Critical' if Powder.objects.filter(current_stock__lte=F('min_level')).exists() else 'Normal',
+        'powders_below_threshold': Powder.objects.filter(current_stock__lte=F('min_level')).count(),
     }
 
 # Add these new views for utilities analytics

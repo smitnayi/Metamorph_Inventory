@@ -9,6 +9,7 @@ class Powder(models.Model):
     sku = models.CharField(max_length=50, unique=True)
     current_stock = models.IntegerField(default=0)
     min_level = models.IntegerField(default=0)
+    price_per_kg = models.DecimalField(max_digits=10, decimal_places=2, default=0.00)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     

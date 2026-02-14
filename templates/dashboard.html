@@ -6,28 +6,13 @@
 <!-- Specific fonts for the new design -->
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet" />
 <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
-
-<script>
-    // Local scripts if any
-</script>
-
 <style>
     .material-icons {
         font-size: inherit;
     }
 
-    /* Customization mode styles */
-    .customization-mode .widget-handle {
-        opacity: 1 !important;
-    }
-
-    .customization-mode .widget-remove {
-        opacity: 1 !important;
-    }
-
-    /* Widget transition */
-    .widget {
-        transition: transform 0.2s, opacity 0.2s;
+    [x-cloak] {
+        display: none !important;
     }
 </style>
 {% endblock %}
@@ -37,38 +22,18 @@
     function dashboardComponent() {
         return {
             loading: true,
-            customizing: false,
-
-            // Data
             overviewData: {},
             utilitiesData: {},
-            productionTasks: [],
-            alerts: [],
-
-            // Widget state (persisted in local storage ideally, but simple state here)
-            widgets: {
-                production_overview: true,
-                alerts: true,
-                inventory: true,
-                maintenance: true,
-                daily_production: true,
-                current_project: true
-            },
+            recentActivity: [],
 
             async initDashboard() {
                 try {
-                    console.log('Initializing dashboard...');
                     const data = await dataService.updateDashboardData();
-                    this.overviewData = data.overview || {};
-                    this.utilitiesData = data.utilities || {};
+                    this.overviewData = data;
+                    this.utilitiesData = data;
+                    this.recentActivity = data.recent_activity || [];
 
-                    // Simulate loading other data until we have real endpoints
-                    // Mapping backend data to UI format
-                    this.alerts = [
-                        { type: 'error', title: 'High Temp Alert: Oven 2', desc: 'Temp at 195°C. Check ventilation.', time: '2m ago' },
-                        { type: 'warning', title: 'Low Powder Supply', desc: 'Hopper 3 at 15% capacity.', time: '15m ago' }
-                    ];
-
+                    this.initCharts(data);
                     this.loading = false;
                 } catch (error) {
                     console.error('Error loading dashboard:', error);
@@ -76,19 +41,58 @@
                 }
             },
 
-            toggleCustomization() {
-                this.customizing = !this.customizing;
-            },
+            initCharts(data) {
+                // Stock Usage Bar Chart
+                const ctxUsage = document.getElementById('usageChart').getContext('2d');
+                new Chart(ctxUsage, {
+                    type: 'bar',
+                    data: {
+                        labels: data.chart_labels || ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul'],
+                        datasets: [{
+                            label: 'Monthly Usage',
+                            data: data.monthly_usage || [65, 59, 80, 81, 56, 55, 40],
+                            backgroundColor: '#10b981',
+                            borderRadius: 4,
+                            barThickness: 20,
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { beginAtZero: true, grid: { color: '#e5e7eb' }, ticks: { display: false } },
+                            x: { grid: { display: false } }
+                        }
+                    }
+                });
 
-            removeWidget(widgetName) {
-                if (confirm('Remove this widget?')) {
-                    this.widgets[widgetName] = false;
-                }
-            },
-
-            addWidget(widgetName) {
-                this.widgets[widgetName] = true;
-                this.customizing = false; // Close customization mode
+                // Goal/Progress Line Chart
+                const ctxGoal = document.getElementById('goalChart').getContext('2d');
+                new Chart(ctxGoal, {
+                    type: 'line',
+                    data: {
+                        labels: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'],
+                        datasets: [{
+                            label: 'Stock Level',
+                            data: [2400, 2380, 2420, 2390, 2450, 2410, 2450], // Mock
+                            borderColor: '#059669',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4,
+                            pointRadius: 0
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            y: { display: false },
+                            x: { display: false }
+                        }
+                    }
+                });
             }
         }
     }
@@ -96,297 +100,208 @@
 {% endblock %}
 
 {% block content %}
-<div x-data="dashboardComponent()" x-init="initDashboard()" class="font-sans text-text-light dark:text-text-dark">
+<div x-data="dashboardComponent()" x-init="initDashboard()" class="space-y-6">
 
-    <!-- Dashboard Header -->
-    <header class="flex flex-wrap items-center justify-between gap-4 mb-8">
-        <div class="flex items-center gap-3">
-            <div class="bg-primary p-2 rounded-lg text-white">
-                <span class="material-icons text-2xl">layers</span>
-            </div>
-            <h1 class="text-2xl font-bold">CoatRight Dashboard</h1>
+    <!-- Welcome Header -->
+    <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div>
+            <h1 class="text-2xl font-bold text-gray-800 dark:text-gray-100">Welcome Back, {{
+                user.first_name|default:user.username|title }}</h1>
+            <p class="text-sm text-gray-500 dark:text-gray-400">Here's what's happening with your inventory today.</p>
         </div>
-
-        <div class="flex items-center gap-4">
-            <!-- Customize Button -->
-            <button @click="toggleCustomization()"
-                class="flex items-center gap-2 px-4 py-2 rounded-lg transition-colors duration-200"
-                :class="customizing ? 'bg-primary text-white hover:bg-primary/90' : 'bg-white dark:bg-surface-dark hover:bg-gray-200 dark:hover:bg-gray-700'">
-                <span class="material-symbols-outlined text-xl"
-                    x-text="customizing ? 'done' : 'dashboard_customize'"></span>
-                <span class="text-sm font-medium" x-text="customizing ? 'Done' : 'Customize'"></span>
-            </button>
-
-            <button
-                class="bg-white dark:bg-surface-dark p-2 rounded-full hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors">
-                <span class="material-icons">add</span>
-            </button>
+        <div
+            class="flex items-center gap-3 bg-white dark:bg-gray-800 rounded-lg p-2 shadow-sm border border-gray-100 dark:border-gray-700">
+            <span class="material-symbols-outlined text-gray-400">calendar_today</span>
+            <span class="text-sm font-medium text-gray-700 dark:text-gray-300">{% now "d M, Y" %}</span>
         </div>
-    </header>
+    </div>
 
-    <!-- Grid Container -->
-    <div class="grid grid-cols-1 lg:grid-cols-4 gap-6" :class="{'customization-mode': customizing}">
+    <!-- Top Cards Row -->
+    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
 
-        <!-- 1. Production Overview -->
-        <div x-show="widgets.production_overview" x-transition
-            class="lg:col-span-3 bg-surface-light dark:bg-surface-dark p-6 rounded-xl relative widget shadow-sm">
+        <!-- 1. Total Stock Value (Green Gradient Card) -->
+        <div
+            class="rounded-2xl p-6 text-white shadow-lg bg-gradient-to-br from-emerald-600 to-emerald-800 relative overflow-hidden">
+            <!-- Decorative circle -->
+            <div class="absolute top-0 right-0 -mr-8 -mt-8 w-32 h-32 rounded-full bg-white opacity-10"></div>
 
-            <!-- Widget Controls -->
-            <button
-                class="widget-handle absolute top-2 left-2 cursor-grab text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity">
-                <span class="material-symbols-outlined">drag_indicator</span>
-            </button>
-            <button @click="removeWidget('production_overview')"
-                class="widget-remove absolute top-2 right-2 text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity hover:text-red-500">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-
-            <h2 class="text-3xl font-bold mb-4">Production Overview</h2>
-            <div class="flex items-center gap-2 mb-8">
-                <span class="bg-primary text-white text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">Active
-                    Projects: <span x-text="overviewData.activeJobs || 0"></span></span>
-                <span
-                    class="bg-gray-200 dark:bg-gray-700 text-text-light dark:text-text-dark text-xs font-semibold mr-2 px-2.5 py-0.5 rounded-full">QC
-                    Pass: <span x-text="(overviewData.qcPassRate?.current || 0) + '%'"></span></span>
+            <div class="relative z-10 flex justify-between items-start mb-8">
+                <div>
+                    <p class="text-emerald-100 text-sm font-medium mb-1">Total Stock Value</p>
+                    <h2 class="text-3xl font-bold tracking-tight">
+                        $<span
+                            x-text="(overviewData.total_inventory_value || 0).toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2})"></span>
+                    </h2>
+                </div>
+                <div class="p-2 bg-white/20 rounded-lg backdrop-blur-sm">
+                    <span class="material-symbols-outlined">payments</span>
+                </div>
             </div>
 
-            <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <!-- Throughput -->
-                <div class="bg-background-light dark:bg-background-dark p-4 rounded-lg flex items-center gap-4">
-                    <span class="material-icons text-primary text-3xl">speed</span>
-                    <div>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Total Orders (Month)</p>
-                        <p class="text-xl font-bold">
-                            <span x-text="utilitiesData.total_orders || 0"></span>
-                            <span class="text-sm font-normal">orders</span>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Electricity (Mapped to 'Oven Temp' placeholder from design for now or keep generic) -->
-                <!-- Let's map it to Real Electricity Data for more value -->
-                <div class="bg-background-light dark:bg-background-dark p-4 rounded-lg flex items-center gap-4">
-                    <span class="material-icons text-primary text-3xl">bolt</span>
-                    <div>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Electricity Usage</p>
-                        <p class="text-xl font-bold">
-                            <span x-text="utilitiesData.electricity?.current || 0"></span>
-                            <span class="text-sm font-normal">kWh</span>
-                        </p>
-                    </div>
-                </div>
-
-                <!-- Powder Usage -->
-                <div class="bg-background-light dark:bg-background-dark p-4 rounded-lg flex items-center gap-4">
-                    <span class="material-icons text-primary text-3xl">opacity</span>
-                    <div>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Powder Stock</p>
-                        <p class="text-xl font-bold">
-                            <span x-text="overviewData.stockLevels?.current || 0"></span>
-                            <span class="text-sm font-normal">kg</span>
-                        </p>
-                    </div>
-                </div>
+            <div class="relative z-10 flex items-center gap-2">
+                <span class="text-xs font-semibold bg-emerald-500/30 px-2 py-0.5 rounded text-white">VISA</span>
+                <span class="text-xs text-emerald-100/80">**** 1234 (Linked)</span>
+                <span class="ml-auto text-xs text-emerald-100">EXP 09/28</span>
             </div>
         </div>
 
-        <!-- 2. Alerts & Notifications -->
-        <div x-show="widgets.alerts" x-transition
-            class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl relative widget shadow-sm">
-
-            <button
-                class="widget-handle absolute top-2 left-2 cursor-grab text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity">
-                <span class="material-symbols-outlined">drag_indicator</span>
-            </button>
-            <button @click="removeWidget('alerts')"
-                class="widget-remove absolute top-2 right-2 text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity hover:text-red-500">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-
+        <!-- 2. Usage Chart -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Alerts & Notifications</h3>
-            </div>
-
-            <div class="space-y-4">
-                <!-- Low Powder Alert -->
-                <template x-if="overviewData.powderStock?.status === 'Critical'">
-                    <div class="flex items-start gap-4">
-                        <div class="bg-red-100 dark:bg-red-900/30 p-2 rounded-full">
-                            <span class="material-icons text-red-500 dark:text-red-400">error_outline</span>
-                        </div>
-                        <div>
-                            <p class="font-semibold">Critical Stock Alert</p>
-                            <p class="text-sm text-subtle-light dark:text-subtle-dark">
-                                <span x-text="overviewData.powderStock.belowThreshold"></span> powders below threshold.
-                            </p>
-                            <p class="text-xs text-subtle-light dark:text-subtle-dark mt-1">Now</p>
-                        </div>
-                    </div>
-                </template>
-
-                <!-- Static placeholder alerts for design fidelity -->
-                <template x-for="alert in alerts" :key="alert.title">
-                    <div class="flex items-start gap-4">
-                        <div class="p-2 rounded-full"
-                            :class="alert.type === 'error' ? 'bg-red-100 dark:bg-red-900/30' : 'bg-yellow-100 dark:bg-yellow-900/30'">
-                            <span class="material-icons"
-                                :class="alert.type === 'error' ? 'text-red-500 dark:text-red-400' : 'text-yellow-500 dark:text-yellow-400'"
-                                x-text="alert.type === 'error' ? 'error_outline' : 'warning_amber'"></span>
-                        </div>
-                        <div>
-                            <p class="font-semibold" x-text="alert.title"></p>
-                            <p class="text-sm text-subtle-light dark:text-subtle-dark" x-text="alert.desc"></p>
-                            <p class="text-xs text-subtle-light dark:text-subtle-dark mt-1" x-text="alert.time"></p>
-                        </div>
-                    </div>
-                </template>
-            </div>
-        </div>
-
-        <!-- 3. Inventory Status -->
-        <div x-show="widgets.inventory" x-transition
-            class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl lg:col-span-1 relative widget shadow-sm">
-
-            <button
-                class="widget-handle absolute top-2 left-2 cursor-grab text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity">
-                <span class="material-symbols-outlined">drag_indicator</span>
-            </button>
-            <button @click="removeWidget('inventory')"
-                class="widget-remove absolute top-2 right-2 text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity hover:text-red-500">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Inventory Status</h3>
-                <a class="text-sm font-medium text-primary bg-primary/10 px-3 py-1 rounded-md"
-                    href="{% url 'inventory' %}">View All</a>
-            </div>
-
-            <div class="space-y-4">
-                <!-- Example Dynamic Inventory Item -->
-                <div class="flex items-center gap-4">
-                    <span class="material-icons text-yellow-500">warning</span>
-                    <div>
-                        <p class="font-semibold">Matte Black TGIC</p>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Low Stock: 52kg</p>
-                    </div>
+                <h3 class="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-emerald-500">bar_chart</span>
+                    Avg. Usage
+                </h3>
+                <div class="flex gap-2">
                     <button
-                        class="ml-auto bg-primary/10 text-primary text-xs font-semibold px-3 py-1 rounded-md">Reorder</button>
+                        class="text-xs font-medium px-2 py-1 bg-emerald-100 text-emerald-700 rounded-md">Monthly</button>
                 </div>
-
-                <!-- Static placeholders -->
-                <div class="flex items-center gap-4">
-                    <span class="material-icons text-green-500">check_circle</span>
-                    <div>
-                        <p class="font-semibold">RAL 9005 Powder</p>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">In Stock: 88kg</p>
-                    </div>
-                </div>
+            </div>
+            <div class="h-32">
+                <canvas id="usageChart"></canvas>
             </div>
         </div>
 
-        <!-- 4. Maintenance Schedule -->
-        <div x-show="widgets.maintenance" x-transition
-            class="bg-surface-light dark:bg-surface-dark p-6 rounded-xl lg:col-span-2 relative widget shadow-sm">
-
-            <button
-                class="widget-handle absolute top-2 left-2 cursor-grab text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity">
-                <span class="material-symbols-outlined">drag_indicator</span>
-            </button>
-            <button @click="removeWidget('maintenance')"
-                class="widget-remove absolute top-2 right-2 text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity hover:text-red-500">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-
+        <!-- 3. Goal/Stock Level -->
+        <div class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
             <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Maintenance Schedule</h3>
+                <h3 class="font-semibold text-gray-800 dark:text-gray-200 flex items-center gap-2">
+                    <span class="material-symbols-outlined text-emerald-500">trending_up</span>
+                    Stock Health
+                </h3>
+                <span class="text-emerald-500 material-symbols-outlined">north_east</span>
+            </div>
+            <div class="mb-2">
+                <p class="text-xs text-gray-500">Total Balance</p>
+                <p class="text-xl font-bold text-gray-800 dark:text-gray-100">
+                    <span x-text="overviewData.powder_stock || 0"></span> kg
+                </p>
+            </div>
+            <div class="h-24">
+                <canvas id="goalChart"></canvas>
+            </div>
+            <div class="flex justify-between mt-2 gap-2">
+                <button
+                    class="flex-1 bg-emerald-600 text-white text-xs py-1.5 rounded-lg hover:bg-emerald-700 transition">Analyze</button>
+                <button
+                    class="flex-1 border border-gray-200 dark:border-gray-600 text-gray-600 dark:text-gray-300 text-xs py-1.5 rounded-lg hover:bg-gray-50 dark:hover:bg-gray-700 transition">Report</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Second Row -->
+    <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+        <!-- Left Col: Weekly Revenue & Stats -->
+        <div class="space-y-6">
+            <div
+                class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                <p class="text-sm text-gray-500 mb-1">Weekly Output</p>
+                <div class="flex items-center gap-3">
+                    <h3 class="text-2xl font-bold text-gray-800 dark:text-gray-100">+<span
+                            x-text="overviewData.active_jobs || 0"></span> Orders</h3>
+                    <span
+                        class="bg-emerald-100 text-emerald-700 text-xs font-bold px-2 py-0.5 rounded-full">+12.8%</span>
+                </div>
             </div>
 
-            <div class="space-y-4">
-                <div class="flex items-start gap-4">
-                    <div class="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full">
-                        <span class="material-icons text-blue-500 dark:text-blue-400">engineering</span>
+            <div
+                class="bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+                <div class="flex items-center gap-3 mb-2">
+                    <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-300">inventory</span>
                     </div>
                     <div>
-                        <p class="font-semibold">Filter Replacement - Booth 2</p>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Scheduled for Tomorrow, 8:00 AM</p>
+                        <p class="text-xs text-gray-500">Low Stock Items</p>
+                        <p class="font-bold text-gray-800 dark:text-gray-100"
+                            x-text="overviewData.powders_below_threshold || 0"></p>
                     </div>
                 </div>
-                <!-- More static maintenance items... -->
-                <div class="flex items-start gap-4">
-                    <div class="bg-blue-100 dark:bg-blue-900/30 p-2 rounded-full">
-                        <span class="material-icons text-blue-500 dark:text-blue-400">build</span>
+                <div class="flex items-center gap-3">
+                    <div class="p-2 bg-gray-100 dark:bg-gray-700 rounded-lg">
+                        <span class="material-symbols-outlined text-gray-600 dark:text-gray-300">verified</span>
                     </div>
                     <div>
-                        <p class="font-semibold">Oven Calibration - Oven B</p>
-                        <p class="text-sm text-subtle-light dark:text-subtle-dark">Due in 3 days</p>
+                        <p class="text-xs text-gray-500">QC Pass Rate</p>
+                        <p class="font-bold text-gray-800 dark:text-gray-100"><span
+                                x-text="overviewData.oc_pass_rate"></span>%</p>
                     </div>
                 </div>
             </div>
         </div>
 
-        <!-- 5. Daily Production Chart (Visual Placeholder) -->
-        <div x-show="widgets.daily_production" x-transition
-            class="lg:col-span-2 bg-surface-light dark:bg-surface-dark p-6 rounded-xl relative widget shadow-sm">
-
-            <button
-                class="widget-handle absolute top-2 left-2 cursor-grab text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity">
-                <span class="material-symbols-outlined">drag_indicator</span>
-            </button>
-            <button @click="removeWidget('daily_production')"
-                class="widget-remove absolute top-2 right-2 text-subtle-light dark:text-subtle-dark opacity-0 transition-opacity hover:text-red-500">
-                <span class="material-symbols-outlined">close</span>
-            </button>
-
-            <div class="flex justify-between items-center mb-4">
-                <h3 class="text-xl font-bold">Daily Production</h3>
+        <!-- Middle Col: Specific History -->
+        <div
+            class="lg:col-span-2 bg-white dark:bg-gray-800 rounded-2xl p-6 shadow-sm border border-gray-100 dark:border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <div>
+                    <h3 class="font-bold text-lg text-gray-800 dark:text-gray-100">Production History</h3>
+                    <p class="text-xs text-gray-500">Recent jobs and their status</p>
+                </div>
+                <a href="{% url 'production' %}"
+                    class="bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 p-2 rounded-lg transition-colors">
+                    <span class="material-symbols-outlined text-gray-600 dark:text-gray-300">arrow_forward</span>
+                </a>
             </div>
 
-            <div class="flex gap-2 mb-4 border-b border-gray-200 dark:border-gray-700">
-                <button class="text-sm font-medium text-primary border-b-2 border-primary pb-2 px-2">Units</button>
-                <button class="text-sm font-medium text-subtle-light dark:text-subtle-dark pb-2 px-2">Rejects</button>
-                <button class="text-sm font-medium text-subtle-light dark:text-subtle-dark pb-2 px-2">Downtime</button>
-            </div>
+            <div class="overflow-x-auto">
+                <table class="w-full">
+                    <thead>
+                        <tr class="text-left text-xs text-gray-500 border-b border-gray-100 dark:border-gray-700">
+                            <th class="pb-3 font-medium">Order / Product</th>
+                            <th class="pb-3 font-medium">Date</th>
+                            <th class="pb-3 font-medium">Quantity</th>
+                            <th class="pb-3 font-medium">Status</th>
+                        </tr>
+                    </thead>
+                    <tbody class="text-sm">
+                        <template x-for="item in recentActivity" :key="item.order_id">
+                            <tr
+                                class="group border-b border-gray-50 dark:border-gray-800 last:border-0 hover:bg-gray-50 dark:hover:bg-gray-700/50 transition">
+                                <td class="py-4">
+                                    <div class="flex items-center gap-3">
+                                        <div
+                                            class="h-8 w-8 rounded-full bg-emerald-100 text-emerald-600 flex items-center justify-center font-bold text-xs">
+                                            <span
+                                                x-text="item.product_name ? item.product_name.substring(0,2).toUpperCase() : 'NA'"></span>
+                                        </div>
+                                        <div>
+                                            <p class="font-medium text-gray-800 dark:text-gray-200"
+                                                x-text="item.product_name"></p>
+                                            <p class="text-xs text-gray-500" x-text="item.order_id"></p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td class="py-4 text-gray-600 dark:text-gray-400"
+                                    x-text="new Date(item.created_at).toLocaleDateString()"></td>
+                                <td class="py-4 text-gray-600 dark:text-gray-400" x-text="item.quantity"></td>
+                                <td class="py-4">
+                                    <span
+                                        class="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium"
+                                        :class="{
+                                            'bg-emerald-50 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400': item.status === 'completed' || item.status === 'in_progress',
+                                            'bg-yellow-50 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400': item.status === 'pending',
+                                            'bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-400': item.status === 'cancelled'
+                                          }">
+                                        <span class="w-1.5 h-1.5 rounded-full" :class="{
+                                                'bg-emerald-500': item.status === 'completed' || item.status === 'in_progress',
+                                                'bg-yellow-500': item.status === 'pending',
+                                                'bg-red-500': item.status === 'cancelled'
+                                              }"></span>
+                                        <span x-text="item.status.replace('_', ' ')"></span>
+                                    </span>
+                                </td>
+                            </tr>
+                        </template>
 
-            <!-- Simplified CSS Bar Chart -->
-            <div class="flex justify-between items-end h-48 space-x-2">
-                <div class="flex flex-col items-center flex-1 h-full justify-end gap-1">
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-lg" style="height: 60%;"></div>
-                    <span class="text-xs text-subtle-light dark:text-subtle-dark">Mon</span>
-                </div>
-                <div class="flex flex-col items-center flex-1 h-full justify-end gap-1 relative">
-                    <div
-                        class="absolute -top-6 bg-text-light dark:bg-text-dark text-white dark:text-black text-xs font-bold px-2 py-1 rounded">
-                        1800</div>
-                    <div class="w-full bg-primary rounded-lg" style="height: 100%;"></div>
-                    <span class="text-xs text-subtle-light dark:text-subtle-dark">Tue</span>
-                </div>
-                <div class="flex flex-col items-center flex-1 h-full justify-end gap-1">
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-lg" style="height: 50%;"></div>
-                    <span class="text-xs text-subtle-light dark:text-subtle-dark">Wed</span>
-                </div>
-                <div class="flex flex-col items-center flex-1 h-full justify-end gap-1">
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-lg" style="height: 75%;"></div>
-                    <span class="text-xs text-subtle-light dark:text-subtle-dark">Thu</span>
-                </div>
-                <div class="flex flex-col items-center flex-1 h-full justify-end gap-1">
-                    <div class="w-full bg-gray-200 dark:bg-gray-700 rounded-lg" style="height: 40%;"></div>
-                    <span class="text-xs text-subtle-light dark:text-subtle-dark">Fri</span>
-                </div>
+                        <!-- Empty State -->
+                        <tr x-show="recentActivity.length === 0">
+                            <td colspan="4" class="py-8 text-center text-gray-500">No recent activity found.</td>
+                        </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
-
-        <!-- Add Widget Placeholder (Visible only in Customization Mode) -->
-        <div x-show="customizing"
-            class="hidden lg:col-span-4 border-2 border-dashed border-gray-300 dark:border-gray-600 rounded-xl flex flex-col items-center justify-center p-6 text-center text-subtle-light dark:text-subtle-dark cursor-pointer hover:bg-gray-50 dark:hover:bg-white/5 transition-colors"
-            @click="customizing = false"> <!-- Simplified for now -->
-            <button class="bg-primary text-white p-3 rounded-full mb-4">
-                <span class="material-symbols-outlined text-3xl">add</span>
-            </button>
-            <h3 class="text-lg font-semibold text-text-light dark:text-text-dark">Add New Widget</h3>
-            <p>Select from available widgets to add to your dashboard.</p>
-        </div>
-
     </div>
 </div>
 {% endblock %}
