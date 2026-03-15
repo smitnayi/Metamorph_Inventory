@@ -29,17 +29,17 @@ export default function Sidebar({ collapsed, onToggle }) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="h-screen flex flex-col border-r border-glass-border"
+      className="h-screen flex flex-col"
       style={{
-        background: 'rgba(255, 255, 255, 0.03)',
+        background: 'var(--glass-bg)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
-        borderRight: '1px solid rgba(255, 255, 255, 0.06)',
+        borderRight: '1px solid var(--glass-border)',
         boxShadow: 'inset -1px 0 0 rgba(245, 166, 35, 0.05)',
       }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5 border-b border-glass-border">
+      <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: '1px solid var(--divider)' }}>
         <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-heading font-bold text-sm"
           style={{ background: 'linear-gradient(135deg, #F5A623, #D48B0F)', color: '#0D0F14' }}>
           MM
@@ -53,8 +53,8 @@ export default function Sidebar({ collapsed, onToggle }) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <span className="font-heading font-bold text-sm text-text-primary leading-tight block">Metamorph</span>
-              <span className="text-[10px] text-text-muted leading-tight block">Metal Protect LLP</span>
+              <span className="font-heading font-bold text-sm leading-tight block" style={{ color: 'var(--text-primary)' }}>Metamorph</span>
+              <span className="text-[10px] leading-tight block" style={{ color: 'var(--text-muted)' }}>Metal Protect LLP</span>
             </motion.div>
           )}
         </AnimatePresence>
@@ -72,17 +72,16 @@ export default function Sidebar({ collapsed, onToggle }) {
                 }`}
                 style={{
                   background: isActive ? 'rgba(245, 166, 35, 0.1)' : 'transparent',
-                  color: isActive ? '#F5A623' : '#64748B',
+                  color: isActive ? '#F5A623' : 'var(--text-muted)',
                 }}
                 whileHover={{
-                  backgroundColor: isActive ? 'rgba(245, 166, 35, 0.12)' : 'rgba(255, 255, 255, 0.04)',
-                  color: isActive ? '#F5A623' : '#F1F5F9',
+                  backgroundColor: isActive ? 'rgba(245, 166, 35, 0.12)' : 'var(--surface-hover)',
+                  color: isActive ? '#F5A623' : 'var(--text-primary)',
                   x: collapsed ? 0 : 4,
                 }}
                 whileTap={{ scale: 0.97 }}
                 transition={{ duration: 0.2 }}
               >
-                {/* Active indicator */}
                 {isActive && (
                   <motion.div
                     layoutId="sidebar-active"
@@ -105,24 +104,18 @@ export default function Sidebar({ collapsed, onToggle }) {
                   )}
                 </AnimatePresence>
               </motion.div>
-              {/* Tooltip when collapsed */}
-              {collapsed && (
-                <div className="absolute left-full top-1/2 -translate-y-1/2 ml-2 px-2 py-1 bg-charcoal-lighter text-text-primary text-xs rounded-md opacity-0 hover:opacity-100 pointer-events-none whitespace-nowrap z-50 border border-glass-border">
-                  {item.label}
-                </div>
-              )}
             </NavLink>
           );
         })}
       </nav>
 
       {/* Collapse button */}
-      <div className="p-3 border-t border-glass-border">
+      <div className="p-3" style={{ borderTop: '1px solid var(--divider)' }}>
         <motion.button
           onClick={onToggle}
-          className="w-full flex items-center justify-center py-2 rounded-lg text-text-muted hover:text-text-primary transition-colors"
-          style={{ background: 'rgba(255, 255, 255, 0.03)' }}
-          whileHover={{ backgroundColor: 'rgba(255, 255, 255, 0.06)' }}
+          className="w-full flex items-center justify-center py-2 rounded-lg transition-colors"
+          style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
+          whileHover={{ background: 'var(--surface-hover)' }}
           whileTap={{ scale: 0.95 }}
         >
           <motion.svg

@@ -1,423 +1,208 @@
-import { useState, useRef } from 'react';
+import { useState, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import {
-  DndContext,
-  closestCenter,
-  PointerSensor,
-  useSensor,
-  useSensors,
-  DragOverlay,
-  useDroppable,
-} from '@dnd-kit/core';
-import {
-  SortableContext,
-  verticalListSortingStrategy,
-  useSortable,
-} from '@dnd-kit/sortable';
+import { DndContext, closestCenter, DragOverlay, useDroppable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
+import { SortableContext, verticalListSortingStrategy, useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { tasksData } from '../data/mockData';
+import { usePersistedState, useActivityFeed } from '../store/useStore';
+import GlassCard from '../components/GlassCard';
 import Modal from '../components/Modal';
 import { useToast } from '../App';
 
-const priorityColors = { High: '#EF4444', Medium: '#F5A623', Low: '#22C55E' };
-const tagColors = {
-  Production: '#00D4FF',
-  Quality: '#F5A623',
-  Maintenance: '#22C55E',
-  Inventory: '#A78BFA',
-  Safety: '#64748B',
-};
+const COLUMNS = [
+  { id: 'todo', label: 'To Do', color: '#64748B' },
+  { id: 'inprogress', label: 'In Progress', color: '#F5A623' },
+  { id: 'done', label: 'Completed', color: '#22C55E' },
+];
 
-// ----- TaskCard (sortable) -----
-function TaskCard({ task, onClick, isDragOverlay = false }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
-    useSortable({ id: task.id });
+const PRIORITIES = { high: '#EF4444', medium: '#F5A623', low: '#22C55E' };
 
-  const cardStyle = {
-    transform: CSS.Transform.toString(transform),
-    transition,
-    opacity: isDragging ? 0.3 : 1,
-    background: 'rgba(255,255,255,0.04)',
-    border: '1px solid rgba(255,255,255,0.07)',
-    borderRadius: 12,
-    padding: 14,
-    marginBottom: 8,
-    cursor: isDragOverlay ? 'grabbing' : 'grab',
-    userSelect: 'none',
+const emptyTask = { title: '', description: '', priority: 'medium', assignee: '', status: 'todo' };
+
+function TaskCard({ task, overlay }) {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const style = {
+    transform: CSS.Transform.toString(transform), transition,
+    opacity: isDragging ? 0.4 : 1,
+    background: 'var(--glass-bg)', border: '1px solid var(--glass-border)', borderRadius: 12,
+    padding: '12px 14px', cursor: 'grab',
   };
 
-  return (
-    <div ref={setNodeRef} style={cardStyle} {...attributes} {...listeners} onClick={onClick}>
-      <div className="flex items-start justify-between mb-2">
-        <h4 className="text-sm font-medium text-text-primary leading-tight flex-1 mr-2">
-          {task.title}
-        </h4>
-        <div
-          className="w-2 h-2 rounded-full flex-shrink-0 mt-1"
-          style={{ background: priorityColors[task.priority], boxShadow: `0 0 6px ${priorityColors[task.priority]}` }}
-        />
+  const card = (
+    <div ref={!overlay ? setNodeRef : undefined} style={overlay ? { ...style, opacity: 1, boxShadow: '0 12px 40px rgba(0,0,0,0.3)' } : style}
+      {...(!overlay ? { ...attributes, ...listeners } : {})}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-2 h-2 rounded-full" style={{ background: PRIORITIES[task.priority] }} />
+        <span className="text-xs font-medium uppercase tracking-wider" style={{ color: PRIORITIES[task.priority] }}>{task.priority}</span>
       </div>
-      <p className="text-xs text-text-muted line-clamp-2 mb-3">{task.description}</p>
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div
-            className="w-6 h-6 rounded-md flex items-center justify-center text-[9px] font-bold"
-            style={{ background: 'rgba(245,166,35,0.2)', color: '#F5A623' }}
-          >
-            {task.avatar}
+      <p className="text-sm font-medium mb-1" style={{ color: 'var(--text-primary)' }}>{task.title}</p>
+      {task.description && <p className="text-xs mb-2 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{task.description}</p>}
+      {task.assignee && (
+        <div className="flex items-center gap-1.5 mt-2">
+          <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(245,166,35,0.2)', color: '#F5A623' }}>
+            {task.assignee.split(' ').map(w => w[0]).join('').slice(0, 2)}
           </div>
-          <span className="text-xs text-text-muted">{task.assignee.split(' ')[0]}</span>
+          <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{task.assignee}</span>
         </div>
-        <div className="flex items-center gap-2">
-          <span
-            className="text-[10px] px-2 py-0.5 rounded-md font-medium"
-            style={{ background: `${tagColors[task.tag]}20`, color: tagColors[task.tag] }}
-          >
-            {task.tag}
-          </span>
-          <span className="text-[10px] text-text-muted font-mono">{task.dueTime}</span>
-        </div>
-      </div>
+      )}
     </div>
   );
+  return card;
 }
 
-// ----- KanbanColumn (droppable) -----
-function KanbanColumn({ id, title, tasks, color, onTaskClick }) {
-  const { setNodeRef, isOver } = useDroppable({ id });
-
+function DroppableColumn({ column, tasks: colTasks, onOpenTask }) {
+  const { setNodeRef, isOver } = useDroppable({ id: column.id });
   return (
-    <div className="flex-1 min-w-[280px]">
+    <div ref={setNodeRef} className="flex flex-col min-h-[300px]" style={{
+      background: isOver ? 'var(--surface-hover)' : 'transparent',
+      borderRadius: 16, padding: '8px', transition: 'background 0.2s',
+    }}>
       <div className="flex items-center gap-2 mb-4 px-1">
-        <div className="w-2 h-2 rounded-full" style={{ background: color, boxShadow: `0 0 6px ${color}` }} />
-        <h3 className="font-heading font-semibold text-sm text-text-primary">{title}</h3>
-        <span
-          className="text-xs font-mono px-2 py-0.5 rounded-md"
-          style={{ background: 'rgba(255,255,255,0.06)', color: '#64748B' }}
-        >
-          {tasks.length}
-        </span>
+        <div className="w-2.5 h-2.5 rounded-full" style={{ background: column.color }} />
+        <span className="text-xs font-bold uppercase tracking-wider" style={{ color: column.color }}>{column.label}</span>
+        <span className="ml-auto text-xs font-mono px-2 py-0.5 rounded-md" style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}>{colTasks.length}</span>
       </div>
-      <div
-        ref={setNodeRef}
-        className="rounded-xl p-2 min-h-[400px] transition-colors"
-        style={{
-          background: isOver ? 'rgba(245,166,35,0.04)' : 'rgba(255,255,255,0.02)',
-          border: `1px solid ${isOver ? 'rgba(245,166,35,0.2)' : 'rgba(255,255,255,0.04)'}`,
-        }}
-      >
-        <SortableContext items={tasks.map((t) => t.id)} strategy={verticalListSortingStrategy}>
-          {tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              onClick={(e) => {
-                e.stopPropagation();
-                onTaskClick(task);
-              }}
-            />
+      <SortableContext items={colTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+        <div className="flex flex-col gap-2 flex-1">
+          {colTasks.map(task => (
+            <div key={task.id} onClick={() => onOpenTask(task)}><TaskCard task={task} /></div>
           ))}
-        </SortableContext>
-        {tasks.length === 0 && (
-          <div className="py-10 text-center">
-            <p className="text-text-muted text-xs">Drop tasks here</p>
-          </div>
-        )}
-      </div>
+        </div>
+      </SortableContext>
     </div>
   );
 }
-
-// helper: which column does a task belong to?
-const getColumnForTask = (taskId, tasks) => tasks.find((t) => t.id === taskId)?.status ?? null;
 
 export default function TaskManager() {
-  const [tasks, setTasks] = useState(tasksData);
-  const [selectedTask, setSelectedTask] = useState(null);
-  const [taskModalOpen, setTaskModalOpen] = useState(false);
-  const [newTaskModal, setNewTaskModal] = useState(false);
-  const [activeTask, setActiveTask] = useState(null); // drag overlay
-  const [filter, setFilter] = useState('All');
+  const [tasks, setTasks] = usePersistedState('tasks', []);
+  const [modalOpen, setModalOpen] = useState(false);
+  const [detailTask, setDetailTask] = useState(null);
+  const [form, setForm] = useState(emptyTask);
+  const [activeId, setActiveId] = useState(null);
   const addToast = useToast();
+  const { logActivity } = useActivityFeed();
 
-  // new task form state
-  const [newTitle, setNewTitle] = useState('');
-  const [newDesc, setNewDesc] = useState('');
-  const [newPriority, setNewPriority] = useState('Medium');
-  const [newAssignee, setNewAssignee] = useState('Raj Mehta');
-  const [newTag, setNewTag] = useState('Production');
+  const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const sensors = useSensors(
-    useSensor(PointerSensor, { activationConstraint: { distance: 6 } })
-  );
+  const tasksByCol = COLUMNS.reduce((acc, col) => {
+    acc[col.id] = tasks.filter(t => t.status === col.id);
+    return acc;
+  }, {});
 
-  const COLUMNS = {
-    todo: { title: 'To Do', color: '#64748B' },
-    inprogress: { title: 'In Progress', color: '#F5A623' },
-    done: { title: 'Completed', color: '#22C55E' },
+  const handleDragStart = (event) => setActiveId(event.active.id);
+
+  const handleDragEnd = (event) => {
+    setActiveId(null);
+    const { active, over } = event;
+    if (!over) return;
+    const taskId = active.id;
+    let targetCol = over.id;
+    if (!COLUMNS.find(c => c.id === targetCol)) {
+      const overTask = tasks.find(t => t.id === over.id);
+      if (overTask) targetCol = overTask.status;
+      else return;
+    }
+    setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: targetCol } : t));
   };
 
-  const filteredTasks = filter === 'All' ? tasks : tasks.filter((t) => t.priority === filter);
-
-  const handleDragStart = ({ active }) => {
-    setActiveTask(tasks.find((t) => t.id === active.id) ?? null);
+  const handleNewTask = () => {
+    if (!form.title.trim()) { addToast('Task title is required.', 'warning'); return; }
+    const task = { id: Date.now(), ...form, createdAt: new Date().toLocaleString() };
+    setTasks(prev => [...prev, task]);
+    setForm(emptyTask);
+    setModalOpen(false);
+    addToast('Task created!', 'success');
+    logActivity('You', 'created task', form.title, 'success');
   };
 
-  const handleDragEnd = ({ active, over }) => {
-    setActiveTask(null);
-    if (!over || active.id === over.id) return;
-
-    const fromStatus = getColumnForTask(active.id, tasks);
-    // over.id could be a column ID or another task ID
-    const toStatus = COLUMNS[over.id] ? over.id : getColumnForTask(over.id, tasks);
-
-    if (!toStatus || fromStatus === toStatus) return;
-
-    setTasks((prev) =>
-      prev.map((t) => (t.id === active.id ? { ...t, status: toStatus } : t))
-    );
-    addToast(`Task moved to ${COLUMNS[toStatus]?.title}`, 'info');
+  const handleDeleteTask = (id) => {
+    const t = tasks.find(t => t.id === id);
+    setTasks(prev => prev.filter(t => t.id !== id));
+    setDetailTask(null);
+    addToast('Task deleted.', 'info');
+    if (t) logActivity('You', 'deleted task', t.title, 'danger');
   };
 
-  const createTask = () => {
-    if (!newTitle.trim()) return;
-    const avatarMap = {
-      'Raj Mehta': 'RM', 'Priya Shah': 'PS', 'Amit Kumar': 'AK',
-      'Vikram Singh': 'VS', 'Sneha Patel': 'SP',
-    };
-    const newTask = {
-      id: `t${Date.now()}`,
-      title: newTitle,
-      description: newDesc || 'No description provided.',
-      assignee: newAssignee,
-      avatar: avatarMap[newAssignee] ?? 'XX',
-      priority: newPriority,
-      dueTime: 'TBD',
-      tag: newTag,
-      status: 'todo',
-    };
-    setTasks((prev) => [newTask, ...prev]);
-    setNewTaskModal(false);
-    setNewTitle(''); setNewDesc('');
-    addToast('New task created!', 'success');
+  const handleMoveTask = (id, newStatus) => {
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, status: newStatus } : t));
+    setDetailTask(prev => prev ? { ...prev, status: newStatus } : null);
+    addToast(`Task moved to ${COLUMNS.find(c => c.id === newStatus)?.label}`, 'info');
   };
+
+  const nf = (field) => (e) => setForm(prev => ({ ...prev, [field]: e.target.value }));
+  const activeTask = activeId ? tasks.find(t => t.id === activeId) : null;
 
   return (
     <div className="space-y-6 max-w-[1400px] mx-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex items-center justify-between">
         <div>
-          <h2 className="font-heading font-bold text-2xl text-text-primary">Task Manager</h2>
-          <p className="text-text-muted text-sm mt-1">
-            Today's tasks —{' '}
-            {new Date().toLocaleDateString('en-IN', { day: 'numeric', month: 'long', year: 'numeric' })}
-          </p>
+          <h2 className="font-heading font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>Task Manager</h2>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Drag and drop tasks between columns</p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <div className="flex gap-1">
-            {['All', 'High', 'Medium', 'Low'].map((f) => (
-              <motion.button
-                key={f}
-                className={`px-3 py-1.5 rounded-lg text-xs font-medium ${
-                  filter === f
-                    ? 'bg-amber/20 text-amber border border-amber/30'
-                    : 'text-text-muted hover:text-text-primary glass-btn'
-                }`}
-                whileTap={{ scale: 0.95 }}
-                onClick={() => setFilter(f)}
-              >
-                {f}
-              </motion.button>
-            ))}
-          </div>
-          <motion.button
-            className="glass-btn-primary text-sm flex items-center gap-2"
-            whileHover={{ scale: 1.03 }}
-            whileTap={{ scale: 0.97 }}
-            onClick={() => setNewTaskModal(true)}
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
-            </svg>
-            New Task
-          </motion.button>
-        </div>
+        <motion.button className="glass-btn-primary text-sm" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setModalOpen(true)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Task
+        </motion.button>
       </div>
 
-      {/* Summary pills */}
-      <div className="flex gap-4 flex-wrap">
-        {Object.entries(COLUMNS).map(([key, col]) => {
-          const count = filteredTasks.filter((t) => t.status === key).length;
-          return (
-            <div key={key} className="flex items-center gap-2 text-sm">
-              <div className="w-2 h-2 rounded-full" style={{ background: col.color }} />
-              <span className="text-text-muted">{col.title}</span>
-              <span className="font-mono font-bold" style={{ color: col.color }}>{count}</span>
-            </div>
-          );
-        })}
-        <span className="text-text-muted text-sm ml-auto">
-          Total: <span className="text-text-primary font-mono font-bold">{filteredTasks.length}</span>
-        </span>
-      </div>
-
-      {/* Kanban */}
-      <DndContext
-        sensors={sensors}
-        collisionDetection={closestCenter}
-        onDragStart={handleDragStart}
-        onDragEnd={handleDragEnd}
-      >
-        <div className="flex gap-4 overflow-x-auto pb-4">
-          {Object.entries(COLUMNS).map(([status, col]) => (
-            <KanbanColumn
-              key={status}
-              id={status}
-              title={col.title}
-              color={col.color}
-              tasks={filteredTasks.filter((t) => t.status === status)}
-              onTaskClick={(task) => { setSelectedTask(task); setTaskModalOpen(true); }}
-            />
+      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          {COLUMNS.map(col => (
+            <GlassCard key={col.id} hover={false} delay={0} className="!p-3">
+              <DroppableColumn column={col} tasks={tasksByCol[col.id]} onOpenTask={setDetailTask} />
+            </GlassCard>
           ))}
         </div>
-
-        {/* Drag overlay */}
-        <DragOverlay>
-          {activeTask ? <TaskCard task={activeTask} isDragOverlay onClick={() => {}} /> : null}
-        </DragOverlay>
+        <DragOverlay>{activeTask ? <TaskCard task={activeTask} overlay /> : null}</DragOverlay>
       </DndContext>
 
-      {/* Task Detail Modal */}
-      <Modal isOpen={taskModalOpen} onClose={() => setTaskModalOpen(false)} title="Task Details" size="md">
-        {selectedTask && (
-          <div className="space-y-4">
-            <div>
-              <h4 className="text-lg font-heading font-bold text-text-primary">{selectedTask.title}</h4>
-              <p className="text-sm text-text-muted mt-2">{selectedTask.description}</p>
+      {tasks.length === 0 && (
+        <div className="empty-state">
+          <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+          <p className="text-sm font-medium">No tasks yet</p>
+          <p className="text-xs mt-1 opacity-60">Click "New Task" to create your first task</p>
+        </div>
+      )}
+
+      {/* New task modal */}
+      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Create New Task">
+        <div className="space-y-4">
+          <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Title *</label><input className="glass-input w-full" placeholder="Task title" value={form.title} onChange={nf('title')} /></div>
+          <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Description</label><textarea className="glass-input w-full" placeholder="Details…" value={form.description} onChange={nf('description')} /></div>
+          <div className="grid grid-cols-2 gap-4">
+            <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Priority</label>
+              <select className="glass-input w-full" value={form.priority} onChange={nf('priority')}><option value="high">High</option><option value="medium">Medium</option><option value="low">Low</option></select>
             </div>
-            <div className="glow-divider" />
-            <div className="grid grid-cols-2 gap-4">
-              <div>
-                <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Assigned To</p>
-                <div className="flex items-center gap-2">
-                  <div className="w-7 h-7 rounded-lg flex items-center justify-center text-[10px] font-bold"
-                    style={{ background: 'rgba(245,166,35,0.2)', color: '#F5A623' }}>
-                    {selectedTask.avatar}
-                  </div>
-                  <span className="text-sm text-text-primary">{selectedTask.assignee}</span>
-                </div>
-              </div>
-              <div>
-                <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Priority</p>
-                <span className="badge text-xs" style={{
-                  background: `${priorityColors[selectedTask.priority]}20`,
-                  color: priorityColors[selectedTask.priority],
-                  border: `1px solid ${priorityColors[selectedTask.priority]}30`,
-                }}>
-                  {selectedTask.priority}
-                </span>
-              </div>
-              <div>
-                <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Due Time</p>
-                <span className="text-sm font-mono text-text-primary">{selectedTask.dueTime}</span>
-              </div>
-              <div>
-                <p className="text-xs text-text-muted uppercase tracking-wider mb-1">Tag</p>
-                <span className="text-sm px-2 py-0.5 rounded-md"
-                  style={{ background: `${tagColors[selectedTask.tag]}15`, color: tagColors[selectedTask.tag] }}>
-                  {selectedTask.tag}
-                </span>
-              </div>
-            </div>
-            <div className="glow-divider" />
-            <div>
-              <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Move to Column</p>
-              <div className="flex gap-2">
-                {Object.entries(COLUMNS).map(([s, col]) => (
-                  <motion.button
-                    key={s}
-                    className={`px-4 py-2 rounded-lg text-xs font-medium ${
-                      selectedTask.status === s
-                        ? 'bg-amber/20 text-amber border border-amber/30'
-                        : 'glass-btn text-text-muted'
-                    }`}
-                    whileTap={{ scale: 0.95 }}
-                    onClick={() => {
-                      setTasks((prev) => prev.map((t) => t.id === selectedTask.id ? { ...t, status: s } : t));
-                      setSelectedTask((prev) => ({ ...prev, status: s }));
-                      addToast(`Task moved to ${col.title}!`, 'success');
-                    }}
-                  >
-                    {col.title}
-                  </motion.button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <p className="text-xs text-text-muted uppercase tracking-wider mb-2">Add Comment</p>
-              <textarea className="glass-input w-full h-20 resize-none" placeholder="Write a comment..." />
-            </div>
-            <motion.button
-              className="glass-btn-primary w-full py-2.5"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={() => {
-                setTaskModalOpen(false);
-                addToast('Changes saved!', 'success');
-              }}
-            >
-              Save Changes
-            </motion.button>
+            <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Assignee</label><input className="glass-input w-full" placeholder="Name" value={form.assignee} onChange={nf('assignee')} /></div>
           </div>
-        )}
+          <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Column</label>
+            <select className="glass-input w-full" value={form.status} onChange={nf('status')}><option value="todo">To Do</option><option value="inprogress">In Progress</option><option value="done">Completed</option></select>
+          </div>
+          <motion.button className="glass-btn-primary w-full py-3" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.97 }} onClick={handleNewTask}>Create Task</motion.button>
+        </div>
       </Modal>
 
-      {/* New Task Modal */}
-      <Modal isOpen={newTaskModal} onClose={() => setNewTaskModal(false)} title="Create New Task" size="md">
-        <div className="space-y-4">
-          <div>
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wider block mb-1.5">Task Title *</label>
-            <input type="text" className="glass-input w-full" placeholder="e.g. Prepare batch for Line 1"
-              value={newTitle} onChange={(e) => setNewTitle(e.target.value)} />
-          </div>
-          <div>
-            <label className="text-xs text-text-muted font-medium uppercase tracking-wider block mb-1.5">Description</label>
-            <textarea className="glass-input w-full h-20 resize-none" placeholder="Details about the task..."
-              value={newDesc} onChange={(e) => setNewDesc(e.target.value)} />
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="text-xs text-text-muted font-medium uppercase tracking-wider block mb-1.5">Priority</label>
-              <select className="glass-input w-full" value={newPriority} onChange={(e) => setNewPriority(e.target.value)}>
-                <option>High</option><option>Medium</option><option>Low</option>
-              </select>
+      {/* Task detail modal */}
+      <Modal isOpen={!!detailTask} onClose={() => setDetailTask(null)} title={detailTask?.title || 'Task Detail'}>
+        {detailTask && (
+          <div className="space-y-4">
+            <div className="flex items-center gap-2">
+              <div className="w-2.5 h-2.5 rounded-full" style={{ background: PRIORITIES[detailTask.priority] }} />
+              <span className="text-xs font-bold uppercase" style={{ color: PRIORITIES[detailTask.priority] }}>{detailTask.priority} priority</span>
             </div>
-            <div>
-              <label className="text-xs text-text-muted font-medium uppercase tracking-wider block mb-1.5">Assign To</label>
-              <select className="glass-input w-full" value={newAssignee} onChange={(e) => setNewAssignee(e.target.value)}>
-                <option>Raj Mehta</option><option>Priya Shah</option><option>Amit Kumar</option>
-                <option>Vikram Singh</option><option>Sneha Patel</option>
-              </select>
+            {detailTask.description && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>{detailTask.description}</p>}
+            {detailTask.assignee && <p className="text-sm" style={{ color: 'var(--text-muted)' }}>Assigned to: <span style={{ color: 'var(--text-primary)' }}>{detailTask.assignee}</span></p>}
+            <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Move to</label>
+              <div className="flex gap-2">{COLUMNS.map(col => (
+                <motion.button key={col.id} className={`flex-1 py-2 rounded-lg text-xs font-medium ${detailTask.status === col.id ? 'opacity-50' : ''}`}
+                  style={{ background: detailTask.status === col.id ? 'var(--surface)' : 'var(--btn-bg)', color: col.color, border: `1px solid ${col.color}30` }}
+                  disabled={detailTask.status === col.id} whileTap={{ scale: 0.95 }}
+                  onClick={() => handleMoveTask(detailTask.id, col.id)}>{col.label}</motion.button>
+              ))}</div>
             </div>
-            <div>
-              <label className="text-xs text-text-muted font-medium uppercase tracking-wider block mb-1.5">Tag</label>
-              <select className="glass-input w-full" value={newTag} onChange={(e) => setNewTag(e.target.value)}>
-                <option>Production</option><option>Quality</option><option>Maintenance</option>
-                <option>Inventory</option><option>Safety</option>
-              </select>
-            </div>
+            <motion.button className="w-full py-2 rounded-lg text-sm text-danger" style={{ background: 'rgba(239,68,68,0.1)', border: '1px solid rgba(239,68,68,0.2)' }}
+              whileTap={{ scale: 0.97 }} onClick={() => handleDeleteTask(detailTask.id)}>Delete Task</motion.button>
           </div>
-          <div className="pt-2">
-            <motion.button
-              className="glass-btn-primary w-full py-3"
-              whileHover={{ scale: 1.02 }}
-              whileTap={{ scale: 0.97 }}
-              onClick={createTask}
-            >
-              Create Task
-            </motion.button>
-          </div>
-        </div>
+        )}
       </Modal>
     </div>
   );

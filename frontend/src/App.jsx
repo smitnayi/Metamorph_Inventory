@@ -10,13 +10,16 @@ import TaskManager from './pages/TaskManager';
 import QualityManagement from './pages/QualityManagement';
 import UsageMetrics from './pages/UsageMetrics';
 import Settings from './pages/Settings';
+import { ThemeContext, useThemeState } from './store/useStore';
 
+// ── Toast context ──
 export const ToastContext = createContext();
 
 export function useToast() {
   return useContext(ToastContext);
 }
 
+// ── Animated page transitions ──
 function AnimatedRoutes() {
   const location = useLocation();
   return (
@@ -42,6 +45,7 @@ function AnimatedRoutes() {
   );
 }
 
+// ── Main layout ──
 function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [toasts, setToasts] = useState([]);
@@ -60,7 +64,7 @@ function AppLayout() {
 
   return (
     <ToastContext.Provider value={addToast}>
-      <div className="flex h-screen overflow-hidden bg-charcoal">
+      <div className="flex h-screen overflow-hidden">
         <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
         <div className="flex flex-col flex-1 overflow-hidden">
           <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
@@ -77,11 +81,18 @@ function AppLayout() {
   );
 }
 
+// ── App root with theme provider ──
 function App() {
+  const { theme, toggleTheme } = useThemeState();
+
   return (
-    <BrowserRouter>
-      <AppLayout />
-    </BrowserRouter>
+    <ThemeContext.Provider value={{ theme, toggleTheme }}>
+      <div className={theme}>
+        <BrowserRouter>
+          <AppLayout />
+        </BrowserRouter>
+      </div>
+    </ThemeContext.Provider>
   );
 }
 

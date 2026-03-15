@@ -1,57 +1,26 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { motion } from 'framer-motion';
 
 function AnimatedCounter({ value, duration = 1500, prefix = '', suffix = '', decimals = 0 }) {
   const [display, setDisplay] = useState(0);
-  const ref = useRef(null);
 
   useEffect(() => {
-    let start = 0;
     const startTime = Date.now();
     const timer = setInterval(() => {
       const elapsed = Date.now() - startTime;
       const progress = Math.min(elapsed / duration, 1);
-      // Ease out cubic
       const eased = 1 - Math.pow(1 - progress, 3);
-      const current = eased * value;
-      setDisplay(current);
+      setDisplay(eased * value);
       if (progress >= 1) clearInterval(timer);
     }, 16);
     return () => clearInterval(timer);
   }, [value, duration]);
 
-  const formatted = decimals > 0
-    ? display.toFixed(decimals)
-    : Math.floor(display).toLocaleString();
-
+  const formatted = decimals > 0 ? display.toFixed(decimals) : Math.floor(display).toLocaleString();
   return <span>{prefix}{formatted}{suffix}</span>;
 }
 
-function MiniSparkline({ data, color = '#00D4FF', height = 30, width = 80 }) {
-  const max = Math.max(...data);
-  const min = Math.min(...data);
-  const range = max - min || 1;
-  const points = data.map((v, i) => {
-    const x = (i / (data.length - 1)) * width;
-    const y = height - ((v - min) / range) * (height - 4) - 2;
-    return `${x},${y}`;
-  }).join(' ');
-
-  return (
-    <svg width={width} height={height} className="opacity-60">
-      <polyline
-        points={points}
-        fill="none"
-        stroke={color}
-        strokeWidth="1.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-      />
-    </svg>
-  );
-}
-
-export default function StatCard({ title, value, prefix = '', suffix = '', trend, trendUp, sparkData, color = '#00D4FF', delay = 0, decimals = 0, icon }) {
+export default function StatCard({ title, value, prefix = '', suffix = '', trend, trendUp, color = '#00D4FF', delay = 0, decimals = 0, icon }) {
   return (
     <motion.div
       initial={{ opacity: 0, y: 20 }}
@@ -62,8 +31,8 @@ export default function StatCard({ title, value, prefix = '', suffix = '', trend
     >
       <div className="flex items-start justify-between">
         <div>
-          <p className="text-text-muted text-xs font-medium uppercase tracking-wider mb-3 font-body">{title}</p>
-          <p className="text-3xl font-mono font-bold text-text-primary">
+          <p className="text-xs font-medium uppercase tracking-wider mb-3 font-body" style={{ color: 'var(--text-muted)' }}>{title}</p>
+          <p className="text-3xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
             <AnimatedCounter value={value} prefix={prefix} suffix={suffix} decimals={decimals} />
           </p>
         </div>
@@ -75,7 +44,7 @@ export default function StatCard({ title, value, prefix = '', suffix = '', trend
       </div>
       <div className="flex items-center justify-between mt-3">
         {trend && (
-          <div className={`flex items-center gap-1 text-xs font-medium ${trendUp ? 'text-success' : 'text-danger'}`}>
+          <div className={`flex items-center gap-1 text-xs font-medium`} style={{ color: trendUp ? '#22C55E' : '#EF4444' }}>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"
               style={{ transform: trendUp ? 'rotate(0deg)' : 'rotate(180deg)' }}>
               <polyline points="18 15 12 9 6 15" />
@@ -83,7 +52,6 @@ export default function StatCard({ title, value, prefix = '', suffix = '', trend
             {trend}
           </div>
         )}
-        {sparkData && <MiniSparkline data={sparkData} color={color} />}
       </div>
     </motion.div>
   );
