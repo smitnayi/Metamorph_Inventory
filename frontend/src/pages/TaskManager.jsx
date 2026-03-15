@@ -10,11 +10,11 @@ import { useToast } from '../App';
 
 const COLUMNS = [
   { id: 'todo', label: 'To Do', color: '#64748B' },
-  { id: 'inprogress', label: 'In Progress', color: '#F5A623' },
+  { id: 'inprogress', label: 'In Progress', color: '#E8771A' },
   { id: 'done', label: 'Completed', color: '#22C55E' },
 ];
 
-const PRIORITIES = { high: '#EF4444', medium: '#F5A623', low: '#22C55E' };
+const PRIORITIES = { high: '#EF4444', medium: '#E8771A', low: '#22C55E' };
 
 const emptyTask = { title: '', description: '', priority: 'medium', assignee: '', status: 'todo' };
 
@@ -38,7 +38,7 @@ function TaskCard({ task, overlay }) {
       {task.description && <p className="text-xs mb-2 line-clamp-2" style={{ color: 'var(--text-muted)' }}>{task.description}</p>}
       {task.assignee && (
         <div className="flex items-center gap-1.5 mt-2">
-          <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(245,166,35,0.2)', color: '#F5A623' }}>
+          <div className="w-5 h-5 rounded-md flex items-center justify-center text-[10px] font-bold" style={{ background: 'rgba(232,119,26,0.2)', color: '#E8771A' }}>
             {task.assignee.split(' ').map(w => w[0]).join('').slice(0, 2)}
           </div>
           <span className="text-xs" style={{ color: 'var(--text-muted)' }}>{task.assignee}</span>

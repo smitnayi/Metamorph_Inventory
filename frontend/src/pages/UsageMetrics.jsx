@@ -73,7 +73,7 @@ export default function UsageMetrics() {
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
         {[
           { label: 'Total Powder Stock', value: `${totalPowder.toLocaleString()} kg`, color: '#00D4FF' },
-          { label: 'Powder SKUs', value: powderStock.length, color: '#F5A623' },
+          { label: 'Powder SKUs', value: powderStock.length, color: '#E8771A' },
           { label: 'Gas Remaining', value: `${totalGas} m³`, color: '#22C55E' },
           { label: 'Gas Tanks', value: gasData.length, color: '#A78BFA' },
         ].map((t, i) => (

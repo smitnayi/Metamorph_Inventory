@@ -10,7 +10,7 @@ function StatusBadge({ status }) {
   return <span className={`badge ${styles[status] || 'badge-cyan'}`}>{status}</span>;
 }
 
-const emptyForm = { name: '', sku: '', color: '#F5A623', stock: '', location: '', batchDate: '', status: 'In Stock' };
+const emptyForm = { name: '', sku: '', color: '#E8771A', stock: '', location: '', batchDate: '', status: 'In Stock' };
 
 export default function PowderStock() {
   const [stock, setStock] = usePersistedState('powderStock', []);

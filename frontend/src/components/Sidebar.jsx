@@ -22,6 +22,19 @@ const navItems = [
   )},
 ];
 
+// Metamorph SVG logo mark (circle with M)
+function MetamorphLogo({ size = 36 }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="50" cy="50" r="46" fill="#E8771A" />
+      <path d="M30 70 L30 38 L42 55 L50 42 L58 55 L70 38 L70 70" 
+        fill="none" stroke="white" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>
+      <path d="M30 35 L50 22 L70 35" 
+        fill="none" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
+    </svg>
+  );
+}
+
 export default function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
 
@@ -29,20 +42,18 @@ export default function Sidebar({ collapsed, onToggle }) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="h-screen flex flex-col"
+      className="h-screen flex flex-col flex-shrink-0"
       style={{
-        background: 'var(--glass-bg)',
+        background: 'var(--sidebar-bg)',
         backdropFilter: 'blur(20px)',
         WebkitBackdropFilter: 'blur(20px)',
         borderRight: '1px solid var(--glass-border)',
-        boxShadow: 'inset -1px 0 0 rgba(245, 166, 35, 0.05)',
       }}
     >
       {/* Logo */}
-      <div className="flex items-center gap-3 px-4 py-5" style={{ borderBottom: '1px solid var(--divider)' }}>
-        <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 font-heading font-bold text-sm"
-          style={{ background: 'linear-gradient(135deg, #F5A623, #D48B0F)', color: '#0D0F14' }}>
-          MM
+      <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid var(--divider)' }}>
+        <div className="flex-shrink-0">
+          <MetamorphLogo size={collapsed ? 32 : 36} />
         </div>
         <AnimatePresence>
           {!collapsed && (
@@ -53,30 +64,34 @@ export default function Sidebar({ collapsed, onToggle }) {
               transition={{ duration: 0.2 }}
               className="overflow-hidden whitespace-nowrap"
             >
-              <span className="font-heading font-bold text-sm leading-tight block" style={{ color: 'var(--text-primary)' }}>Metamorph</span>
-              <span className="text-[10px] leading-tight block" style={{ color: 'var(--text-muted)' }}>Metal Protect LLP</span>
+              <span className="font-heading font-bold text-sm leading-tight block" style={{ color: 'var(--text-primary)' }}>
+                META<span style={{ color: '#E8771A' }}>M</span>ORPH
+              </span>
+              <span className="text-[10px] leading-tight block" style={{ color: 'var(--text-muted)' }}>
+                Metal Protect LLP
+              </span>
             </motion.div>
           )}
         </AnimatePresence>
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 py-4 px-2 flex flex-col gap-1">
+      <nav className="flex-1 py-4 px-2 flex flex-col gap-1 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path;
           return (
-            <NavLink key={item.path} to={item.path} className="relative">
+            <NavLink key={item.path} to={item.path} className="relative block">
               <motion.div
-                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer transition-colors relative overflow-hidden ${
+                className={`flex items-center gap-3 px-3 py-2.5 rounded-xl cursor-pointer relative overflow-hidden ${
                   collapsed ? 'justify-center' : ''
                 }`}
                 style={{
-                  background: isActive ? 'rgba(245, 166, 35, 0.1)' : 'transparent',
-                  color: isActive ? '#F5A623' : 'var(--text-muted)',
+                  background: isActive ? 'rgba(232, 119, 26, 0.12)' : 'transparent',
+                  color: isActive ? '#E8771A' : 'var(--text-muted)',
                 }}
                 whileHover={{
-                  backgroundColor: isActive ? 'rgba(245, 166, 35, 0.12)' : 'var(--surface-hover)',
-                  color: isActive ? '#F5A623' : 'var(--text-primary)',
+                  backgroundColor: isActive ? 'rgba(232, 119, 26, 0.15)' : 'var(--surface-hover)',
+                  color: isActive ? '#E8771A' : 'var(--text-primary)',
                   x: collapsed ? 0 : 4,
                 }}
                 whileTap={{ scale: 0.97 }}
@@ -86,7 +101,7 @@ export default function Sidebar({ collapsed, onToggle }) {
                   <motion.div
                     layoutId="sidebar-active"
                     className="absolute left-0 top-1/2 -translate-y-1/2 w-[3px] h-5 rounded-r-full"
-                    style={{ background: '#F5A623', boxShadow: '0 0 8px rgba(245, 166, 35, 0.6)' }}
+                    style={{ background: '#E8771A', boxShadow: '0 0 8px rgba(232, 119, 26, 0.6)' }}
                     transition={{ type: 'spring', stiffness: 500, damping: 30 }}
                   />
                 )}
@@ -113,9 +128,9 @@ export default function Sidebar({ collapsed, onToggle }) {
       <div className="p-3" style={{ borderTop: '1px solid var(--divider)' }}>
         <motion.button
           onClick={onToggle}
-          className="w-full flex items-center justify-center py-2 rounded-lg transition-colors"
+          className="w-full flex items-center justify-center py-2 rounded-lg"
           style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
-          whileHover={{ background: 'var(--surface-hover)' }}
+          whileHover={{ scale: 1.02 }}
           whileTap={{ scale: 0.95 }}
         >
           <motion.svg

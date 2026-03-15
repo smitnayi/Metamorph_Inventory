@@ -9,11 +9,11 @@ export default function Header({ onToggleSidebar }) {
 
   return (
     <header
-      className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0"
+      className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0 relative z-50"
       style={{
-        background: 'var(--glass-bg)',
+        background: 'var(--header-bg)',
         borderColor: 'var(--divider)',
-        backdropFilter: 'blur(10px)',
+        backdropFilter: 'blur(12px)',
       }}
     >
       {/* Left side */}
@@ -29,14 +29,14 @@ export default function Header({ onToggleSidebar }) {
           </svg>
         </motion.button>
         <h1 className="font-heading font-bold text-lg hidden md:block" style={{ color: 'var(--text-primary)' }}>
-          Metamorph <span className="text-amber font-normal">Metal Protect</span>
+          Metamorph <span style={{ color: '#E8771A' }}>Metal Protect</span>
         </h1>
       </div>
 
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* Search bar */}
-        <motion.div className="relative" animate={{ width: searchOpen ? 280 : 180 }} transition={{ duration: 0.3 }}>
+        <motion.div className="relative hidden sm:block" animate={{ width: searchOpen ? 280 : 180 }} transition={{ duration: 0.3 }}>
           <input
             type="text"
             placeholder="Search... ⌘K"
@@ -52,10 +52,10 @@ export default function Header({ onToggleSidebar }) {
         {/* Theme toggle */}
         <motion.button
           onClick={toggleTheme}
-          className="p-2 rounded-lg"
-          style={{ background: 'var(--btn-bg)', color: 'var(--text-muted)' }}
-          whileHover={{ scale: 1.08 }}
-          whileTap={{ scale: 0.92 }}
+          className="p-2.5 rounded-xl"
+          style={{ background: 'var(--btn-bg)', color: theme === 'dark' ? '#FACC15' : '#1E3A5F', border: '1px solid var(--btn-border)' }}
+          whileHover={{ scale: 1.1 }}
+          whileTap={{ scale: 0.9 }}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
         >
           {theme === 'dark' ? (
@@ -74,8 +74,8 @@ export default function Header({ onToggleSidebar }) {
 
         {/* Notification bell */}
         <motion.button
-          className="relative p-2 rounded-lg"
-          style={{ background: 'var(--btn-bg)', color: 'var(--text-muted)' }}
+          className="relative p-2.5 rounded-xl"
+          style={{ background: 'var(--btn-bg)', color: 'var(--text-muted)', border: '1px solid var(--btn-border)' }}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
@@ -94,7 +94,7 @@ export default function Header({ onToggleSidebar }) {
             whileTap={{ scale: 0.97 }}
           >
             <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
-              style={{ background: 'linear-gradient(135deg, #F5A623, #D48B0F)', color: '#0D0F14' }}>
+              style={{ background: 'linear-gradient(135deg, #E8771A, #C96410)', color: '#FFFFFF' }}>
               SM
             </div>
             <span className="text-sm font-medium hidden md:block" style={{ color: 'var(--text-primary)' }}>Smit N.</span>
@@ -103,7 +103,6 @@ export default function Header({ onToggleSidebar }) {
             </svg>
           </motion.button>
 
-          {/* Dropdown */}
           <AnimatePresence>
             {profileOpen && (
               <motion.div
@@ -115,7 +114,6 @@ export default function Header({ onToggleSidebar }) {
                 style={{
                   background: 'var(--modal-bg)',
                   border: '1px solid var(--glass-border)',
-                  backdropFilter: 'blur(20px)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                 }}
               >

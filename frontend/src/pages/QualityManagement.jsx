@@ -79,7 +79,7 @@ export default function QualityManagement() {
           { label: 'Total Inspections', value: totalInspections, color: '#00D4FF' },
           { label: 'Pass Rate', value: `${passRate}%`, color: '#22C55E' },
           { label: 'Failed Batches', value: failCount, color: '#EF4444' },
-          { label: 'Passed Batches', value: passCount, color: '#F5A623' },
+          { label: 'Passed Batches', value: passCount, color: '#E8771A' },
         ].map((kpi, i) => (
           <GlassCard key={kpi.label} delay={i * 0.05} className="!p-4">
             <p className="text-xs uppercase tracking-wider font-medium" style={{ color: 'var(--text-muted)' }}>{kpi.label}</p>
