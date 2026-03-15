@@ -10,6 +10,7 @@ import TaskManager from './pages/TaskManager';
 import QualityManagement from './pages/QualityManagement';
 import UsageMetrics from './pages/UsageMetrics';
 import Settings from './pages/Settings';
+import StickerGenerator from './pages/StickerGenerator';
 import { ThemeContext, useThemeState } from './store/useStore';
 
 // ── Toast context ──
@@ -38,6 +39,7 @@ function AnimatedRoutes() {
           <Route path="/tasks" element={<TaskManager />} />
           <Route path="/quality" element={<QualityManagement />} />
           <Route path="/metrics" element={<UsageMetrics />} />
+          <Route path="/stickers" element={<StickerGenerator />} />
           <Route path="/settings" element={<Settings />} />
         </Routes>
       </motion.div>
