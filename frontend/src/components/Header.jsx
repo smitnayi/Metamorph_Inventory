@@ -1,11 +1,13 @@
 import { useState } from 'react';
-import { motion, AnimatePresence } from 'framer-motion';
-import { useTheme } from '../store/useStore';
+import { AnimatePresence, motion } from 'framer-motion';
+import { useCompanyInfo, useThemeState, useAuth } from '../store/useStore';
 
 export default function Header({ onToggleSidebar }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
-  const { theme, toggleTheme } = useTheme();
+  const { theme, toggleTheme } = useThemeState();
+  const { user, logout } = useAuth();
+  const [companyInfo] = useCompanyInfo();
 
   return (
     <header
@@ -95,9 +97,9 @@ export default function Header({ onToggleSidebar }) {
           >
             <div className="w-7 h-7 rounded-lg flex items-center justify-center text-xs font-bold"
               style={{ background: 'linear-gradient(135deg, #E8771A, #C96410)', color: '#FFFFFF' }}>
-              SM
+              {user?.name?.charAt(0) || 'U'}
             </div>
-            <span className="text-sm font-medium hidden md:block" style={{ color: 'var(--text-primary)' }}>Smit N.</span>
+            <span className="text-sm font-medium hidden md:block" style={{ color: 'var(--text-primary)' }}>{user?.name || 'Guest'}</span>
             <svg style={{ color: 'var(--text-muted)' }} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <polyline points="6 9 12 15 18 9" />
             </svg>
@@ -110,27 +112,39 @@ export default function Header({ onToggleSidebar }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-48 rounded-xl overflow-hidden z-50"
+                className="absolute right-0 top-full mt-2 w-56 rounded-xl overflow-hidden z-50"
                 style={{
                   background: 'var(--modal-bg)',
                   border: '1px solid var(--glass-border)',
                   boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
                 }}
               >
-                <div className="p-3 border-b" style={{ borderColor: 'var(--divider)' }}>
-                  <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>Smit Nayi</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>admin@metamorph.in</p>
+                <div className="flex items-center gap-3 p-4 border-b transition-colors" style={{ borderColor: 'var(--divider)' }}>
+                  <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md overflow-hidden" 
+                       style={{ background: 'linear-gradient(135deg, #E8771A, #C96410)' }}>
+                    {user?.name?.charAt(0) || 'U'}
+                  </div>
+                  <div>
+                    <p className="text-sm font-semibold truncate w-[160px]" style={{ color: 'var(--text-primary)' }}>{user?.name}</p>
+                    <p className="text-xs capitalize" style={{ color: 'var(--text-muted)' }}>{user?.role} Portal</p>
+                  </div>
                 </div>
-                <div className="py-1">
-                  {['Profile', 'Settings', 'Sign out'].map((item) => (
-                    <button key={item}
-                      className="w-full text-left px-3 py-2 text-sm transition-colors"
-                      style={{ color: 'var(--text-muted)' }}
-                      onClick={() => setProfileOpen(false)}
-                    >
-                      {item}
-                    </button>
-                  ))}
+
+                <div className="p-2 space-y-1">
+                  <button className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5" style={{ color: 'var(--text-primary)' }}>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+                    Profile Settings
+                  </button>
+                </div>
+                
+                <div className="p-2 border-t" style={{ borderColor: 'var(--divider)' }}>
+                  <button 
+                    onClick={() => logout()}
+                    className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 text-red-500 hover:bg-red-500/10"
+                  >
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                    Sign out
+                  </button>
                 </div>
               </motion.div>
             )}

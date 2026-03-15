@@ -11,7 +11,8 @@ import QualityManagement from './pages/QualityManagement';
 import UsageMetrics from './pages/UsageMetrics';
 import Settings from './pages/Settings';
 import StickerGenerator from './pages/StickerGenerator';
-import { ThemeContext, useThemeState } from './store/useStore';
+import Login from './pages/Login';
+import { ThemeContext, useThemeState, useAuth } from './store/useStore';
 
 // ── Toast context ──
 export const ToastContext = createContext();
@@ -86,12 +87,13 @@ function AppLayout() {
 // ── App root with theme provider ──
 function App() {
   const { theme, toggleTheme } = useThemeState();
+  const { user } = useAuth();
 
   return (
     <ThemeContext.Provider value={{ theme, toggleTheme }}>
       <div className={theme}>
         <BrowserRouter>
-          <AppLayout />
+          {user ? <AppLayout /> : <Login />}
         </BrowserRouter>
       </div>
     </ThemeContext.Provider>

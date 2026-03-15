@@ -58,6 +58,21 @@ export function useThemeState() {
   return { theme, toggleTheme };
 }
 
+// ─── Auth state ───
+export function useAuth() {
+  const [user, setUser] = usePersistedState('user', null);
+
+  const login = useCallback((role) => {
+    setUser({ role, name: role === 'admin' ? 'Admin / Supervisor' : 'Operator' });
+  }, [setUser]);
+
+  const logout = useCallback(() => {
+    setUser(null);
+  }, [setUser]);
+
+  return { user, login, logout, isAdmin: user?.role === 'admin' };
+}
+
 // ─── Company info ───
 const defaultCompany = {
   name: 'Metamorph Metal Protect LLP',
