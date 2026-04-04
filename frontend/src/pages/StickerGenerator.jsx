@@ -76,7 +76,7 @@ export default function StickerGenerator() {
         });
       };
 
-      const logoData = await loadImage('/logo-full.png');
+      const logoData = await loadImage('/logo.png');
 
       while (stickersCreated < totalStickers) {
         if (stickersCreated > 0 && stickersCreated % STICKERS_PER_PAGE === 0) {
@@ -248,9 +248,7 @@ export default function StickerGenerator() {
             >
               <div className="p-3 h-full flex flex-col">
                 <div className="h-10 mb-2 flex items-center">
-                  <div className="flex items-center gap-1.5 font-bold text-black border-2 border-black px-2 py-0.5" style={{ fontSize: '10px' }}>
-                    <span className="text-orange-500">M</span> META
-                  </div>
+                  <img src="/logo.png" alt="Metamorph" style={{ height: 28, objectFit: 'contain' }} />
                 </div>
                 
                 <div className="border-b border-gray-300 w-full mb-3" />

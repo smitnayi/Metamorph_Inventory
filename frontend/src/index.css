@@ -56,35 +56,35 @@
    THEME: Light mode
    ═══════════════════════════════════════ */
 .light {
-  --bg-primary: #F0F2F5;
+  --bg-primary: #F1F3F8;
   --bg-secondary: #FFFFFF;
-  --glass-bg: rgba(255, 255, 255, 0.7);
-  --glass-bg-hover: rgba(255, 255, 255, 0.9);
-  --glass-border: rgba(30, 58, 95, 0.1);
-  --glass-border-hover: rgba(232, 119, 26, 0.3);
-  --text-primary: #1E293B;
-  --text-muted: #64748B;
-  --surface: rgba(30, 58, 95, 0.03);
-  --surface-hover: rgba(30, 58, 95, 0.06);
-  --divider: rgba(30, 58, 95, 0.08);
-  --overlay: rgba(0, 0, 0, 0.3);
+  --glass-bg: rgba(255, 255, 255, 0.85);
+  --glass-bg-hover: rgba(255, 255, 255, 0.95);
+  --glass-border: rgba(30, 58, 95, 0.12);
+  --glass-border-hover: rgba(232, 119, 26, 0.4);
+  --text-primary: #0F172A;
+  --text-muted: #475569;
+  --surface: rgba(30, 58, 95, 0.04);
+  --surface-hover: rgba(30, 58, 95, 0.08);
+  --divider: rgba(30, 58, 95, 0.12);
+  --overlay: rgba(0, 0, 0, 0.35);
   --modal-bg: #FFFFFF;
-  --drawer-bg: #FAFBFC;
-  --btn-bg: linear-gradient(90deg, rgba(255, 255, 255, 0.9) 0%, rgba(255, 255, 255, 0.4) 100%);
-  --btn-bg-hover: linear-gradient(90deg, rgba(255, 255, 255, 1) 0%, rgba(255, 255, 255, 0.6) 100%);
-  --btn-border: rgba(30, 58, 95, 0.15);
-  --input-bg: rgba(30, 58, 95, 0.04);
-  --input-border: rgba(30, 58, 95, 0.12);
-  --scrollbar: rgba(30, 58, 95, 0.12);
-  --scrollbar-hover: rgba(30, 58, 95, 0.2);
-  --dot-grid: rgba(30, 58, 95, 0.02);
+  --drawer-bg: #F8FAFC;
+  --btn-bg: rgba(241, 245, 249, 0.9);
+  --btn-bg-hover: rgba(226, 232, 240, 0.95);
+  --btn-border: rgba(30, 58, 95, 0.18);
+  --input-bg: rgba(241, 245, 249, 0.8);
+  --input-border: rgba(30, 58, 95, 0.18);
+  --scrollbar: rgba(30, 58, 95, 0.15);
+  --scrollbar-hover: rgba(30, 58, 95, 0.28);
+  --dot-grid: rgba(30, 58, 95, 0.025);
   --select-option-bg: #FFFFFF;
-  --skeleton-a: rgba(30, 58, 95, 0.04);
-  --skeleton-b: rgba(30, 58, 95, 0.08);
+  --skeleton-a: rgba(30, 58, 95, 0.06);
+  --skeleton-b: rgba(30, 58, 95, 0.12);
   --badge-glow: 1;
-  --shadow-card: 0 4px 24px rgba(30, 58, 95, 0.08), 0 1px 3px rgba(0, 0, 0, 0.06);
-  --sidebar-bg: rgba(255, 255, 255, 0.92);
-  --header-bg: rgba(255, 255, 255, 0.85);
+  --shadow-card: 0 4px 24px rgba(30, 58, 95, 0.10), 0 1px 4px rgba(0, 0, 0, 0.08);
+  --sidebar-bg: rgba(255, 255, 255, 0.96);
+  --header-bg: rgba(255, 255, 255, 0.92);
   color-scheme: light;
 }
 
@@ -379,3 +379,84 @@ textarea.glass-input {
   opacity: 0.3;
   margin-bottom: 0.75rem;
 }
+
+/* ═══════════════════════════════════════
+   LIGHT MODE: Contrast overrides
+   ═══════════════════════════════════════ */
+
+/* Badge colors adjusted for light backgrounds */
+.light .badge-warning {
+  background: rgba(202, 138, 4, 0.12);
+  color: #A16207;
+  border-color: rgba(202, 138, 4, 0.25);
+}
+
+.light .badge-cyan {
+  background: rgba(6, 182, 212, 0.12);
+  color: #0E7490;
+  border-color: rgba(6, 182, 212, 0.25);
+}
+
+.light .badge-success {
+  background: rgba(22, 163, 74, 0.1);
+  color: #15803D;
+  border-color: rgba(22, 163, 74, 0.2);
+}
+
+.light .badge-danger {
+  background: rgba(220, 38, 38, 0.1);
+  color: #DC2626;
+  border-color: rgba(220, 38, 38, 0.2);
+}
+
+.light .badge-amber {
+  background: rgba(194, 65, 12, 0.1);
+  color: #C2410C;
+  border-color: rgba(194, 65, 12, 0.2);
+}
+
+/* Glass card gets a solid shadow in light mode */
+.light .glass-card {
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06), 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.light .glass-card:hover {
+  box-shadow: 0 8px 30px rgba(30, 58, 95, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+}
+
+/* Glass button in light mode — use solid bg instead of gradient */
+.light .glass-btn {
+  background: var(--btn-bg);
+  border: 1px solid var(--btn-border);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  border-top-color: var(--btn-border);
+  border-left-color: var(--btn-border);
+}
+
+.light .glass-btn:hover {
+  background: var(--btn-bg-hover);
+  border-color: rgba(30, 58, 95, 0.22);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08);
+}
+
+/* Input focus ring in light mode */
+.light .glass-input:focus {
+  border-color: rgba(232, 119, 26, 0.6);
+  box-shadow: 0 0 0 3px rgba(232, 119, 26, 0.12);
+}
+
+/* Table row hover */
+.light tr:hover {
+  background-color: rgba(241, 245, 249, 0.6);
+}
+
+/* Recharts overrides for light mode */
+.light .recharts-cartesian-axis-tick-value {
+  fill: #475569 !important;
+}
+
+.light .recharts-cartesian-grid-horizontal line,
+.light .recharts-cartesian-grid-vertical line {
+  stroke: rgba(30, 58, 95, 0.08);
+}
+

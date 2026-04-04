@@ -24,7 +24,7 @@ export default function QualityManagement() {
   const [filter, setFilter] = useState('All');
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions } = useAuth();
 
   const [newLog, setNewLog] = useState({
     batchId: '', powderType: '', inspector: '', date: new Date().toISOString().slice(0, 10),

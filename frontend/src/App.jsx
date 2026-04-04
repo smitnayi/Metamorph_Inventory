@@ -1,5 +1,5 @@
 import { useState, createContext, useContext } from 'react';
-import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
+import { BrowserRouter, Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import Sidebar from './components/Sidebar';
 import Header from './components/Header';
@@ -12,13 +12,24 @@ import UsageMetrics from './pages/UsageMetrics';
 import Settings from './pages/Settings';
 import StickerGenerator from './pages/StickerGenerator';
 import Login from './pages/Login';
-import { ThemeContext, useThemeState, useAuth } from './store/useStore';
+import { ThemeContext, useThemeState, AuthProvider, useAuth } from './store/useStore';
 
 // ── Toast context ──
 export const ToastContext = createContext();
 
 export function useToast() {
   return useContext(ToastContext);
+}
+
+// ── Protected Route — redirects if user role can't access ──
+function ProtectedRoute({ path, children }) {
+  const { canAccess } = useAuth();
+
+  if (!canAccess(path)) {
+    return <Navigate to="/" replace />;
+  }
+
+  return children;
 }
 
 // ── Animated page transitions ──
@@ -40,8 +51,14 @@ function AnimatedRoutes() {
           <Route path="/tasks" element={<TaskManager />} />
           <Route path="/quality" element={<QualityManagement />} />
           <Route path="/metrics" element={<UsageMetrics />} />
-          <Route path="/stickers" element={<StickerGenerator />} />
-          <Route path="/settings" element={<Settings />} />
+          <Route path="/stickers" element={
+            <ProtectedRoute path="/stickers"><StickerGenerator /></ProtectedRoute>
+          } />
+          <Route path="/settings" element={
+            <ProtectedRoute path="/settings"><Settings /></ProtectedRoute>
+          } />
+          {/* Catch-all: redirect unknown routes to dashboard */}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </motion.div>
     </AnimatePresence>
@@ -84,19 +101,26 @@ function AppLayout() {
   );
 }
 
-// ── App root with theme provider ──
+// ── App content — decides login vs layout ──
+function AppContent() {
+  const { user } = useAuth();
+  return user ? <AppLayout /> : <Login />;
+}
+
+// ── App root with providers ──
 function App() {
   const { theme, toggleTheme } = useThemeState();
-  const { user } = useAuth();
 
   return (
-    <ThemeContext.Provider value={{ theme, toggleTheme }}>
-      <div className={theme}>
-        <BrowserRouter>
-          {user ? <AppLayout /> : <Login />}
-        </BrowserRouter>
-      </div>
-    </ThemeContext.Provider>
+    <AuthProvider>
+      <ThemeContext.Provider value={{ theme, toggleTheme }}>
+        <div className={theme}>
+          <BrowserRouter>
+            <AppContent />
+          </BrowserRouter>
+        </div>
+      </ThemeContext.Provider>
+    </AuthProvider>
   );
 }
 

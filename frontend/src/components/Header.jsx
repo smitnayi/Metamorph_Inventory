@@ -1,21 +1,41 @@
-import { useState } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
-import { useCompanyInfo, useThemeState, useAuth } from '../store/useStore';
+import { useCompanyInfo, useTheme, useAuth } from '../store/useStore';
 
 export default function Header({ onToggleSidebar }) {
   const [searchOpen, setSearchOpen] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
-  const { theme, toggleTheme } = useThemeState();
+  const [notifOpen, setNotifOpen] = useState(false);
+  const { theme, toggleTheme } = useTheme();
   const { user, logout } = useAuth();
   const [companyInfo] = useCompanyInfo();
 
+  // Close dropdowns when clicking outside
+  const profileRef = useRef(null);
+  const notifRef = useRef(null);
+
+  useEffect(() => {
+    function handleClickOutside(e) {
+      if (profileRef.current && !profileRef.current.contains(e.target)) {
+        setProfileOpen(false);
+      }
+      if (notifRef.current && !notifRef.current.contains(e.target)) {
+        setNotifOpen(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   return (
     <header
-      className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0 relative z-50"
+      className="h-16 flex items-center justify-between px-6 border-b flex-shrink-0 relative"
       style={{
         background: 'var(--header-bg)',
         borderColor: 'var(--divider)',
         backdropFilter: 'blur(12px)',
+        zIndex: 40,
       }}
     >
       {/* Left side */}
@@ -38,24 +58,40 @@ export default function Header({ onToggleSidebar }) {
       {/* Right side */}
       <div className="flex items-center gap-3">
         {/* Search bar */}
-        <motion.div className="relative hidden sm:block" animate={{ width: searchOpen ? 280 : 180 }} transition={{ duration: 0.3 }}>
+        <motion.div
+          className="relative hidden sm:flex items-center"
+          animate={{ width: searchOpen ? 280 : 180 }}
+          transition={{ duration: 0.3 }}
+        >
+          <svg
+            className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none"
+            style={{ color: 'var(--text-muted)' }}
+            width="14" height="14"
+            viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+          >
+            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
           <input
             type="text"
             placeholder="Search... ⌘K"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
             className="glass-input w-full pl-9 pr-4 py-2 text-sm"
+            style={{ height: 38 }}
             onFocus={() => setSearchOpen(true)}
             onBlur={() => setSearchOpen(false)}
           />
-          <svg className="absolute left-3 top-1/2 -translate-y-1/2" style={{ color: 'var(--text-muted)' }} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
         </motion.div>
 
         {/* Theme toggle */}
         <motion.button
           onClick={toggleTheme}
           className="p-2.5 rounded-xl"
-          style={{ background: 'var(--btn-bg)', color: theme === 'dark' ? '#FACC15' : '#1E3A5F', border: '1px solid var(--btn-border)' }}
+          style={{
+            background: 'var(--btn-bg)',
+            color: theme === 'dark' ? '#FACC15' : '#1E3A5F',
+            border: '1px solid var(--btn-border)',
+          }}
           whileHover={{ scale: 1.1 }}
           whileTap={{ scale: 0.9 }}
           title={`Switch to ${theme === 'dark' ? 'light' : 'dark'} mode`}
@@ -74,23 +110,63 @@ export default function Header({ onToggleSidebar }) {
           )}
         </motion.button>
 
-        {/* Notification bell */}
-        <motion.button
-          className="relative p-2.5 rounded-xl"
-          style={{ background: 'var(--btn-bg)', color: 'var(--text-muted)', border: '1px solid var(--btn-border)' }}
-          whileHover={{ scale: 1.05 }}
-          whileTap={{ scale: 0.95 }}
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-            <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
-          </svg>
-        </motion.button>
-
-        {/* User avatar */}
-        <div className="relative">
+        {/* Notification bell — now with dropdown */}
+        <div className="relative" ref={notifRef}>
           <motion.button
-            onClick={() => setProfileOpen(!profileOpen)}
-            className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl"
+            onClick={() => { setNotifOpen(!notifOpen); setProfileOpen(false); }}
+            className="relative p-2.5 rounded-xl cursor-pointer"
+            style={{
+              background: 'var(--btn-bg)',
+              color: 'var(--text-muted)',
+              border: '1px solid var(--btn-border)',
+            }}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+            </svg>
+            {/* Notification dot */}
+            <span
+              className="absolute top-2 right-2 w-2 h-2 rounded-full"
+              style={{ background: '#E8771A', boxShadow: '0 0 6px rgba(232, 119, 26, 0.6)' }}
+            />
+          </motion.button>
+
+          <AnimatePresence>
+            {notifOpen && (
+              <motion.div
+                initial={{ opacity: 0, y: -10, scale: 0.95 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: -10, scale: 0.95 }}
+                transition={{ duration: 0.15 }}
+                className="absolute right-0 top-full mt-2 w-72 rounded-xl overflow-hidden"
+                style={{
+                  background: 'var(--modal-bg)',
+                  border: '1px solid var(--glass-border)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                  zIndex: 60,
+                }}
+              >
+                <div className="px-4 py-3 border-b" style={{ borderColor: 'var(--divider)' }}>
+                  <p className="text-sm font-semibold" style={{ color: 'var(--text-primary)' }}>Notifications</p>
+                </div>
+                <div className="p-4 flex flex-col items-center justify-center" style={{ minHeight: 120 }}>
+                  <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" style={{ color: 'var(--text-muted)', opacity: 0.4, marginBottom: 8 }}>
+                    <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" />
+                  </svg>
+                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>No new notifications</p>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* User avatar & profile dropdown */}
+        <div className="relative" ref={profileRef}>
+          <motion.button
+            onClick={() => { setProfileOpen(!profileOpen); setNotifOpen(false); }}
+            className="flex items-center gap-2 pl-2 pr-3 py-1.5 rounded-xl cursor-pointer"
             style={{ background: 'var(--btn-bg)', border: '1px solid var(--glass-border)' }}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.97 }}
@@ -112,26 +188,33 @@ export default function Header({ onToggleSidebar }) {
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: -10, scale: 0.95 }}
                 transition={{ duration: 0.15 }}
-                className="absolute right-0 top-full mt-2 w-56 rounded-xl overflow-hidden z-50"
+                className="absolute right-0 top-full mt-2 w-56 rounded-xl overflow-hidden"
                 style={{
                   background: 'var(--modal-bg)',
                   border: '1px solid var(--glass-border)',
-                  boxShadow: '0 8px 32px rgba(0,0,0,0.3)',
+                  boxShadow: '0 8px 32px rgba(0,0,0,0.2)',
+                  zIndex: 60,
                 }}
               >
-                <div className="flex items-center gap-3 p-4 border-b transition-colors" style={{ borderColor: 'var(--divider)' }}>
+                <div className="flex items-center gap-3 p-4 border-b" style={{ borderColor: 'var(--divider)' }}>
                   <div className="w-10 h-10 rounded-full flex items-center justify-center font-bold text-white shadow-md overflow-hidden" 
                        style={{ background: 'linear-gradient(135deg, #E8771A, #C96410)' }}>
                     {user?.name?.charAt(0) || 'U'}
                   </div>
                   <div>
-                    <p className="text-sm font-semibold truncate w-[160px]" style={{ color: 'var(--text-primary)' }}>{user?.name}</p>
+                    <p className="text-sm font-semibold truncate w-[140px]" style={{ color: 'var(--text-primary)' }}>{user?.name}</p>
                     <p className="text-xs capitalize" style={{ color: 'var(--text-muted)' }}>{user?.role} Portal</p>
                   </div>
                 </div>
 
                 <div className="p-2 space-y-1">
-                  <button className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 hover:bg-black/5 dark:hover:bg-white/5" style={{ color: 'var(--text-primary)' }}>
+                  <button
+                    onClick={() => setProfileOpen(false)}
+                    className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2"
+                    style={{ color: 'var(--text-primary)' }}
+                    onMouseEnter={e => e.currentTarget.style.background = 'var(--surface-hover)'}
+                    onMouseLeave={e => e.currentTarget.style.background = 'transparent'}
+                  >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
                     Profile Settings
                   </button>
@@ -139,7 +222,7 @@ export default function Header({ onToggleSidebar }) {
                 
                 <div className="p-2 border-t" style={{ borderColor: 'var(--divider)' }}>
                   <button 
-                    onClick={() => logout()}
+                    onClick={() => { setProfileOpen(false); logout(); }}
                     className="w-full text-left px-3 py-2 text-sm rounded-lg transition-colors flex items-center gap-2 text-red-500 hover:bg-red-500/10"
                   >
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>

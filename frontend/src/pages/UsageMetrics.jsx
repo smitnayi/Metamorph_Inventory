@@ -23,7 +23,7 @@ export default function UsageMetrics() {
   const [editingGasId, setEditingGasId] = useState(null);
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions } = useAuth();
 
   const gf = (field) => (e) => setGasForm(prev => ({ ...prev, [field]: e.target.value }));
 
@@ -123,8 +123,8 @@ export default function UsageMetrics() {
                     const daysDue = getDaysUntil(g.refillDate);
                     return (
                       <motion.tr key={g.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: i * 0.05 }}
-                        style={{ borderBottom: '1px solid var(--divider)' }} className="group hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer"
-                        onClick={() => { setEditingGasId(g.id); setGasForm(g); setIsModalOpen(true); }}>
+                      style={{ borderBottom: '1px solid var(--divider)' }} className={`group hover:bg-black/5 dark:hover:bg-white/5 ${permissions.canEdit ? 'cursor-pointer' : 'cursor-default'}`}
+                        onClick={() => { if (!permissions.canEdit) return; setEditingGasId(g.id); setGasForm(g); setIsModalOpen(true); }}>
                         <td className="px-5 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{g.type}</td>
                         <td className="px-5 py-3 text-sm font-mono">{g.capacity} L</td>
                         <td className="px-5 py-3 text-sm font-mono text-cyan-500">{g.currentLevel} L</td>

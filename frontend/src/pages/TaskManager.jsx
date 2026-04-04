@@ -92,7 +92,7 @@ export default function TaskManager() {
   const [activeTask, setActiveTask] = useState(null);
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions } = useAuth();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 

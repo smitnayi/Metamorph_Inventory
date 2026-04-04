@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { usePersistedState, useCompanyInfo, useNotifications, useTheme, exportCSV } from '../store/useStore';
+import { usePersistedState, useCompanyInfo, useNotifications, useTheme, useAuth, exportCSV } from '../store/useStore';
 import GlassCard from '../components/GlassCard';
 import Modal from '../components/Modal';
 import { useToast } from '../App';

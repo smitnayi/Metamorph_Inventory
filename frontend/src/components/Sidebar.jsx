@@ -26,24 +26,22 @@ const navItems = [
   )},
 ];
 
-// Metamorph SVG logo mark (circle with M)
+// Metamorph logo from /logo.png
 function MetamorphLogo({ size = 36 }) {
   return (
-    <svg width={size} height={size} viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
-      <circle cx="50" cy="50" r="46" fill="#E8771A" />
-      <path d="M30 70 L30 38 L42 55 L50 42 L58 55 L70 38 L70 70" 
-        fill="none" stroke="white" strokeWidth="6" strokeLinecap="round" strokeLinejoin="round"/>
-      <path d="M30 35 L50 22 L70 35" 
-        fill="none" stroke="white" strokeWidth="5" strokeLinecap="round" strokeLinejoin="round"/>
-    </svg>
+    <img
+      src="/logo.png"
+      alt="Metamorph"
+      style={{ width: size, height: size, objectFit: 'contain', borderRadius: 6 }}
+    />
   );
 }
 
 export default function Sidebar({ collapsed, onToggle }) {
   const location = useLocation();
-  const { isAdmin } = useAuth();
+  const { canAccess } = useAuth();
   
-  const visibleNavItems = navItems.filter(item => !item.adminOnly || isAdmin);
+  const visibleNavItems = navItems.filter(item => canAccess(item.path));
 
   return (
     <motion.aside

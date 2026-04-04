@@ -21,7 +21,7 @@ export default function PowderStock() {
   const [editingId, setEditingId] = useState(null);
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin } = useAuth();
+  const { isAdmin, permissions } = useAuth();
 
   const filtered = data.filter((item) => {
     const matchesSearch = (item.name || '').toLowerCase().includes(searchTerm.toLowerCase()) || (item.sku || '').toLowerCase().includes(searchTerm.toLowerCase());
@@ -34,7 +34,10 @@ export default function PowderStock() {
   const totalStock = data.reduce((sum, p) => sum + Number(p.stock || 0), 0);
 
   const openAdd = () => { setEditingId(null); setForm(emptyForm); setIsDrawerOpen(true); };
-  const openEdit = (item) => { setEditingId(item.id); setForm({ name: item.name, sku: item.sku, color: item.color, stock: item.stock, location: item.location, batchDate: item.batchDate, status: item.status }); setIsDrawerOpen(true); };
+  const openEdit = (item) => {
+    if (!permissions.canEdit) return; // operators cannot edit existing entries
+    setEditingId(item.id); setForm({ name: item.name, sku: item.sku, color: item.color, stock: item.stock, location: item.location, batchDate: item.batchDate, status: item.status }); setIsDrawerOpen(true);
+  };
 
   const handleSave = () => {
     if (!form.name.trim() || !form.sku.trim()) { addToast('Name and SKU are required.', 'warning'); return; }
@@ -127,7 +130,7 @@ export default function PowderStock() {
                 <AnimatePresence>
                   {filtered.map((item, i) => (
                     <motion.tr key={item.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, height: 0 }} transition={{ delay: i * 0.05 }}
-                      className="cursor-pointer group" style={{ borderBottom: '1px solid var(--divider)' }} onClick={() => openEdit(item)}
+                      className={`group ${permissions.canEdit ? 'cursor-pointer' : 'cursor-default'}`} style={{ borderBottom: '1px solid var(--divider)' }} onClick={() => openEdit(item)}
                       whileHover={{ backgroundColor: 'var(--surface-hover)' }}>
                       <td className="px-5 py-3"><div className="w-6 h-6 rounded-md shadow-inner border" style={{ backgroundColor: item.color, borderColor: 'rgba(255,255,255,0.1)' }} title={item.color} /></td>
                       <td className="px-5 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{item.name}</td>

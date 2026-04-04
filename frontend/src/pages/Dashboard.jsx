@@ -1,7 +1,7 @@
 import { useMemo } from 'react';
 import StatCard from '../components/StatCard';
 import GlassCard from '../components/GlassCard';
-import { usePersistedState, useActivityFeed } from '../store/useStore';
+import { usePersistedState, useActivityFeed, useTheme } from '../store/useStore';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
 
@@ -85,6 +85,11 @@ export default function Dashboard() {
   const [qualityLogs] = usePersistedState('qualityLogs', []);
   const [gasData] = usePersistedState('gasData', []);
   const { feed } = useActivityFeed();
+  const { theme } = useTheme();
+
+  // Theme-aware colors for Recharts (can't use CSS variables)
+  const tickColor = theme === 'dark' ? '#64748B' : '#475569';
+  const chartStroke = theme === 'dark' ? '#00D4FF' : '#0891B2';
 
   const kpi = useMemo(() => {
     const totalStock = powderStock.reduce((s, p) => s + Number(p.stock || 0), 0);
@@ -142,14 +147,14 @@ export default function Dashboard() {
                 <AreaChart data={usageChart} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
                   <defs>
                     <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor="#00D4FF" stopOpacity={0.3} />
-                      <stop offset="100%" stopColor="#00D4FF" stopOpacity={0} />
+                      <stop offset="0%" stopColor={chartStroke} stopOpacity={0.3} />
+                      <stop offset="100%" stopColor={chartStroke} stopOpacity={0} />
                     </linearGradient>
                   </defs>
-                  <XAxis dataKey="date" tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: 'var(--text-muted)', fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <XAxis dataKey="date" tick={{ fill: tickColor, fontSize: 10 }} axisLine={false} tickLine={false} />
+                  <YAxis tick={{ fill: tickColor, fontSize: 10 }} axisLine={false} tickLine={false} />
                   <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="usage" stroke="#00D4FF" strokeWidth={2} fill="url(#colorUsage)" animationDuration={1500} />
+                  <Area type="monotone" dataKey="usage" stroke={chartStroke} strokeWidth={2} fill="url(#colorUsage)" animationDuration={1500} />
                 </AreaChart>
               </ResponsiveContainer>
             </div>

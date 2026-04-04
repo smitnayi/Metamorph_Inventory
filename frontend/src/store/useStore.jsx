@@ -58,19 +58,87 @@ export function useThemeState() {
   return { theme, toggleTheme };
 }
 
-// ─── Auth state ───
-export function useAuth() {
-  const [user, setUser] = usePersistedState('user', null);
+// ═══════════════════════════════════════
+//  RBAC: Role-Based Access Control
+// ═══════════════════════════════════════
+
+// Permission matrix per role
+const ROLE_PERMISSIONS = {
+  admin: {
+    pages: ['/', '/powder-stock', '/tasks', '/quality', '/metrics', '/stickers', '/settings'],
+    canCreate: true,
+    canEdit: true,
+    canDelete: true,
+    canExport: true,
+    canManageTeam: true,
+  },
+  operator: {
+    pages: ['/', '/powder-stock', '/tasks', '/quality', '/metrics'],
+    canCreate: true,   // operators do data entry
+    canEdit: false,
+    canDelete: false,
+    canExport: false,
+    canManageTeam: false,
+  },
+};
+
+// Auth context — single source of truth for auth state
+export const AuthContext = createContext({
+  user: null,
+  login: () => {},
+  logout: () => {},
+  isAdmin: false,
+  permissions: ROLE_PERMISSIONS.operator,
+  canAccess: () => false,
+});
+
+// Auth provider — wraps the entire app
+export function AuthProvider({ children }) {
+  const [user, setUser] = useState(() => load('user', null));
+
+  // Persist user to localStorage on change
+  useEffect(() => { save('user', user); }, [user]);
 
   const login = useCallback((role) => {
-    setUser({ role, name: role === 'admin' ? 'Admin / Supervisor' : 'Operator' });
-  }, [setUser]);
+    const newUser = {
+      role,
+      name: role === 'admin' ? 'Admin / Supervisor' : 'Operator',
+    };
+    setUser(newUser);
+  }, []);
 
   const logout = useCallback(() => {
     setUser(null);
-  }, [setUser]);
+  }, []);
 
-  return { user, login, logout, isAdmin: user?.role === 'admin' };
+  const isAdmin = user?.role === 'admin';
+  const permissions = ROLE_PERMISSIONS[user?.role] || ROLE_PERMISSIONS.operator;
+
+  // Check if current role can access a specific page path
+  const canAccess = useCallback((path) => {
+    if (!user) return false;
+    return permissions.pages.includes(path);
+  }, [user, permissions]);
+
+  const value = {
+    user,
+    login,
+    logout,
+    isAdmin,
+    permissions,
+    canAccess,
+  };
+
+  return (
+    <AuthContext.Provider value={value}>
+      {children}
+    </AuthContext.Provider>
+  );
+}
+
+// Hook to consume auth context
+export function useAuth() {
+  return useContext(AuthContext);
 }
 
 // ─── Company info ───
