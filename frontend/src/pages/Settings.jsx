@@ -110,7 +110,7 @@ export default function Settings() {
               <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Industrial Powder Coating & Metal Protection</p>
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Company Name</label><input className="glass-input w-full" value={companyInfo.name} onChange={cf('name')} /></div>
             <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Email</label><input className="glass-input w-full" placeholder="info@company.com" value={companyInfo.email} onChange={cf('email')} /></div>
             <div><label className="text-xs font-medium uppercase tracking-wider block mb-1.5" style={{ color: 'var(--text-muted)' }}>Phone</label><input className="glass-input w-full" placeholder="+91..." value={companyInfo.phone} onChange={cf('phone')} /></div>

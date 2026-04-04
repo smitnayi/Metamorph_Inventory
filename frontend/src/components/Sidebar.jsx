@@ -37,7 +37,7 @@ function MetamorphLogo({ size = 36 }) {
   );
 }
 
-export default function Sidebar({ collapsed, onToggle }) {
+export default function Sidebar({ collapsed, onToggle, mobileOpen, closeMobile }) {
   const location = useLocation();
   const { canAccess } = useAuth();
   
@@ -47,7 +47,9 @@ export default function Sidebar({ collapsed, onToggle }) {
     <motion.aside
       animate={{ width: collapsed ? 64 : 240 }}
       transition={{ duration: 0.3, ease: 'easeInOut' }}
-      className="h-screen flex flex-col flex-shrink-0"
+      className={`fixed lg:relative inset-y-0 left-0 z-[60] flex flex-col flex-shrink-0 transition-transform duration-300 ${
+        mobileOpen ? 'translate-x-0' : '-translate-x-full lg:translate-x-0'
+      }`}
       style={{
         background: 'var(--sidebar-bg)',
         backdropFilter: 'blur(20px)',
@@ -55,6 +57,12 @@ export default function Sidebar({ collapsed, onToggle }) {
         borderRight: '1px solid var(--glass-border)',
       }}
     >
+      {/* Mobile close proxy (visible only on mobile if open) */}
+      <div className={`absolute right-[-48px] top-4 lg:hidden transition-opacity duration-300 ${mobileOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}>
+        <button onClick={closeMobile} className="p-2 bg-black/40 rounded-full text-white backdrop-blur-md">
+          <svg width="24" height="24" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M18 6L6 18M6 6l12 12"/></svg>
+        </button>
+      </div>
       {/* Logo */}
       <div className="flex items-center gap-3 px-4 py-4" style={{ borderBottom: '1px solid var(--divider)' }}>
         <div className="flex-shrink-0">
@@ -131,22 +139,18 @@ export default function Sidebar({ collapsed, onToggle }) {
 
       {/* Collapse button */}
       <div className="p-3" style={{ borderTop: '1px solid var(--divider)' }}>
-        <motion.button
+        <button
           onClick={onToggle}
-          className="w-full flex items-center justify-center py-2 rounded-lg"
-          style={{ background: 'var(--surface)', color: 'var(--text-muted)' }}
-          whileHover={{ scale: 1.02 }}
-          whileTap={{ scale: 0.95 }}
+          className="w-full flex items-center justify-center p-3 text-sm font-medium hover:bg-black/5 dark:hover:bg-white/5 transition-colors hidden lg:flex"
+          style={{ color: 'var(--text-muted)' }}
         >
-          <motion.svg
-            width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-            strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
-            animate={{ rotate: collapsed ? 180 : 0 }}
-            transition={{ duration: 0.3 }}
+          <svg
+            width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
+            className={`transition-transform duration-300 ${collapsed ? 'rotate-180' : ''}`}
           >
             <polyline points="15 18 9 12 15 6" />
-          </motion.svg>
-        </motion.button>
+          </svg>
+        </button>
       </div>
     </motion.aside>
   );

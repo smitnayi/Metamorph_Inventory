@@ -115,7 +115,7 @@ export default function PowderStock() {
             <thead>
               <tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)' }}>
                 {['Color', 'Name', 'SKU', 'Stock (kg)', 'Location', 'Status', 'Updated', ''].map((h, i) => (
-                  <th key={i} className="px-5 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  <th key={i} className={`px-5 py-4 text-xs font-semibold uppercase tracking-wider ${['SKU', 'Location', 'Updated'].includes(h) ? 'hidden md:table-cell' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -134,11 +134,11 @@ export default function PowderStock() {
                       whileHover={{ backgroundColor: 'var(--surface-hover)' }}>
                       <td className="px-5 py-3"><div className="w-6 h-6 rounded-md shadow-inner border" style={{ backgroundColor: item.color, borderColor: 'rgba(255,255,255,0.1)' }} title={item.color} /></td>
                       <td className="px-5 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{item.name}</td>
-                      <td className="px-5 py-3 text-sm font-mono" style={{ color: '#00D4FF' }}>{item.sku}</td>
+                      <td className="px-5 py-3 text-sm font-mono hidden md:table-cell" style={{ color: '#00D4FF' }}>{item.sku}</td>
                       <td className="px-5 py-3 font-semibold" style={{ color: 'var(--text-primary)' }}>{item.stock}</td>
-                      <td className="px-5 py-3 text-sm" style={{ color: 'var(--text-muted)' }}>{item.location}</td>
+                      <td className="px-5 py-3 text-sm hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{item.location}</td>
                       <td className="px-5 py-3"><StatusBadge status={item.status} /></td>
-                      <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{item.lastUpdated}</td>
+                      <td className="px-5 py-3 text-xs hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{item.lastUpdated}</td>
                       <td className="px-5 py-3 text-right">
                         {isAdmin && (
                           <motion.button className="p-1 rounded" style={{ color: 'var(--text-muted)' }} whileTap={{ scale: 0.9 }}

@@ -113,7 +113,7 @@ export default function UsageMetrics() {
             <table className="w-full">
               <thead><tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)' }}>
                 {['Gas Type', 'Capacity', 'Current', 'Fill %', 'Refill Due', 'Cost', ''].map(h => (
-                  <th key={h} className="text-left px-5 py-3 text-xs uppercase tracking-wider font-semibold" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  <th key={h} className={`text-left px-5 py-3 text-xs uppercase tracking-wider font-semibold ${['Capacity', 'Fill %', 'Cost'].includes(h) ? 'hidden md:table-cell' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr></thead>
               <tbody>
@@ -126,9 +126,9 @@ export default function UsageMetrics() {
                       style={{ borderBottom: '1px solid var(--divider)' }} className={`group hover:bg-black/5 dark:hover:bg-white/5 ${permissions.canEdit ? 'cursor-pointer' : 'cursor-default'}`}
                         onClick={() => { if (!permissions.canEdit) return; setEditingGasId(g.id); setGasForm(g); setIsModalOpen(true); }}>
                         <td className="px-5 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{g.type}</td>
-                        <td className="px-5 py-3 text-sm font-mono">{g.capacity} L</td>
+                        <td className="px-5 py-3 text-sm font-mono hidden md:table-cell">{g.capacity} L</td>
                         <td className="px-5 py-3 text-sm font-mono text-cyan-500">{g.currentLevel} L</td>
-                        <td className="px-5 py-3">
+                        <td className="px-5 py-3 hidden md:table-cell">
                           <div className="flex items-center gap-2">
                             <div className="w-20 h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
                               <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, fillPct)}%`, background: fillPct > 50 ? '#10B981' : fillPct > 20 ? '#FACC15' : '#F43F5E' }} />
@@ -143,7 +143,7 @@ export default function UsageMetrics() {
                             </span>
                           ) : <span className="text-gray-500">—</span>}
                         </td>
-                        <td className="px-5 py-3 font-semibold text-right" style={{ color: 'var(--text-primary)' }}>₹{g.cost || '0'}</td>
+                        <td className="px-5 py-3 font-semibold text-right hidden md:table-cell" style={{ color: 'var(--text-primary)' }}>₹{g.cost || '0'}</td>
                         <td className="px-5 py-3 text-right">
                           {isAdmin && (
                             <motion.button 

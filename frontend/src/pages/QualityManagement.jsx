@@ -110,7 +110,7 @@ export default function QualityManagement() {
             <thead>
               <tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)' }}>
                 {['Batch ID', 'Powder Type', 'Date', 'Result', 'Notes', ''].map((h, i) => (
-                  <th key={i} className="px-5 py-4 text-xs font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>{h}</th>
+                  <th key={i} className={`px-5 py-4 text-xs font-semibold uppercase tracking-wider ${['Date', 'Notes'].includes(h) ? 'hidden md:table-cell' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
                 ))}
               </tr>
             </thead>
@@ -130,9 +130,9 @@ export default function QualityManagement() {
                       whileHover={{ backgroundColor: 'var(--surface-hover)' }}>
                       <td className="px-5 py-3 text-sm font-mono" style={{ color: '#00D4FF' }}>{log.batchId}</td>
                       <td className="px-5 py-3 text-sm" style={{ color: 'var(--text-primary)' }}>{log.powderType}</td>
-                      <td className="px-5 py-3 text-xs" style={{ color: 'var(--text-muted)' }}>{log.date}</td>
+                      <td className="px-5 py-3 text-xs hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{log.date}</td>
                       <td className="px-5 py-3"><ResultBadge result={log.result} /></td>
-                      <td className="px-5 py-3 text-sm truncate max-w-[180px]" style={{ color: 'var(--text-muted)' }}>{log.notes}</td>
+                      <td className="px-5 py-3 text-sm truncate max-w-[180px] hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{log.notes}</td>
                       <td className="px-5 py-3 text-right">
                         <div className="flex items-center justify-end">
                           <motion.svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"

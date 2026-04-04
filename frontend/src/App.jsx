@@ -68,6 +68,7 @@ function AnimatedRoutes() {
 // ── Main layout ──
 function AppLayout() {
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const [toasts, setToasts] = useState([]);
 
   const addToast = (message, type = 'success') => {
@@ -84,13 +85,21 @@ function AppLayout() {
 
   return (
     <ToastContext.Provider value={addToast}>
-      <div className="flex h-screen overflow-hidden">
-        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} />
+      <div className="flex h-screen overflow-hidden relative">
+        <Sidebar collapsed={sidebarCollapsed} onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} mobileOpen={mobileMenuOpen} closeMobile={() => setMobileMenuOpen(false)} />
+        <div className="flex flex-col flex-1 overflow-hidden w-full">
+          <Header onToggleSidebar={() => setSidebarCollapsed(!sidebarCollapsed)} onToggleMobileMenu={() => setMobileMenuOpen(true)} />
           <AnimatedRoutes />
         </div>
       </div>
+      
+      {/* Mobile Sidebar Overlay Backdrop */}
+      {mobileMenuOpen && (
+        <div 
+          className="fixed inset-0 bg-black/50 backdrop-blur-sm z-[50] lg:hidden" 
+          onClick={() => setMobileMenuOpen(false)}
+        />
+      )}
       {/* Toast container */}
       <div className="fixed top-4 right-4 z-[100] flex flex-col gap-2">
         {toasts.map((toast) => (

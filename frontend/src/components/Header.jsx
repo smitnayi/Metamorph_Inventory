@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { AnimatePresence, motion } from 'framer-motion';
 import { useCompanyInfo, useTheme, useAuth } from '../store/useStore';
 
-export default function Header({ onToggleSidebar }) {
+export default function Header({ onToggleSidebar, onToggleMobileMenu }) {
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [profileOpen, setProfileOpen] = useState(false);
@@ -41,7 +41,7 @@ export default function Header({ onToggleSidebar }) {
       {/* Left side */}
       <div className="flex items-center gap-4">
         <motion.button
-          onClick={onToggleSidebar}
+          onClick={onToggleMobileMenu}
           className="lg:hidden"
           style={{ color: 'var(--text-muted)' }}
           whileTap={{ scale: 0.9 }}
@@ -56,7 +56,7 @@ export default function Header({ onToggleSidebar }) {
       </div>
 
       {/* Right side */}
-      <div className="flex items-center gap-3">
+      <div className="flex items-center gap-4">
         {/* Search bar */}
         <motion.div
           className="relative hidden sm:flex items-center"
