@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import GlassCard from '../components/GlassCard';
 import Modal from '../components/Modal';
-import { usePersistedState, useActivityFeed, useAuth } from '../store/useStore';
+import { useAuth, useActivityFeed } from '../store/useStore';
 import { useToast } from '../App';
+import { api } from '../services/api';
 
 function getDaysUntil(dateStr) {
   if (!dateStr) return null;
@@ -14,178 +15,201 @@ function getDaysUntil(dateStr) {
   return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
 }
 
-const emptyGasForm = { type: 'Argon', capacity: '', currentLevel: '', refillDate: '', cost: '' };
+const emptyGasForm = { type: 'Argon', capacity: '', current_level: '', refill_date: '', cost: '' };
 
 export default function UsageMetrics() {
-  const [gasData, setGasData] = usePersistedState('gasData', []);
+  const [gasData, setGasData] = useState([]);
+  const [loading, setLoading] = useState(true);
+  
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [gasForm, setGasForm] = useState(emptyGasForm);
   const [editingGasId, setEditingGasId] = useState(null);
+  const [processing, setProcessing] = useState(false);
+  
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin, permissions } = useAuth();
+  const { permissions, user } = useAuth();
+
+  useEffect(() => {
+    fetchGasRecords();
+  }, []);
+
+  const fetchGasRecords = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/gas-records/');
+      setGasData(res);
+    } catch (err) {
+      addToast('Failed to load gas metrics from server', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const gf = (field) => (e) => setGasForm(prev => ({ ...prev, [field]: e.target.value }));
 
-  const saveGas = () => {
-    if (!gasForm.capacity || !gasForm.currentLevel) { addToast('Capacity and Current Level are required', 'warning'); return; }
+  const saveGas = async () => {
+    if (!gasForm.capacity || !gasForm.current_level) { addToast('Capacity and Current Level are required', 'warning'); return; }
     
-    if (editingGasId) {
-      setGasData(prev => prev.map(g => g.id === editingGasId ? { ...g, ...gasForm } : g));
-      addToast('Gas record updated', 'success');
-      logActivity('You', 'updated gas levels for', gasForm.type, 'info');
-    } else {
-      const newGas = { id: `GAS-${Date.now()}`, ...gasForm, lastUpdated: new Date().toISOString().split('T')[0] };
-      setGasData(prev => [...prev, newGas]);
-      addToast('Gas record added', 'success');
-      logActivity('You', 'logged new gas refill for', gasForm.type, 'success');
+    setProcessing(true);
+    try {
+        const payload = {
+            ...gasForm,
+            capacity: Number(gasForm.capacity) || 0,
+            current_level: Number(gasForm.current_level) || 0,
+            cost: Number(gasForm.cost) || 0,
+            refill_date: gasForm.refill_date || null
+        };
+
+        if (editingGasId) {
+            await api.put(`/gas-records/${editingGasId}/`, payload);
+            addToast('Gas record updated', 'success');
+            logActivity(user.username, 'updated gas levels for', gasForm.type, 'info');
+        } else {
+            await api.post('/gas-records/', payload);
+            addToast('Gas record added', 'success');
+            logActivity(user.username, 'logged new gas refill for', gasForm.type, 'success');
+        }
+        
+        setIsModalOpen(false);
+        fetchGasRecords();
+    } catch (err) {
+        addToast('Failed to save gas metric', 'danger');
+    } finally {
+        setProcessing(false);
     }
-    setIsModalOpen(false);
   };
 
-  const deleteGas = (gas) => {
+  const deleteGas = async (gas) => {
     if (window.confirm('Delete this gas record?')) {
-      setGasData(prev => prev.filter(g => g.id !== gas.id));
-      addToast('Record deleted', 'info');
-      logActivity('You', 'deleted gas record for', gas.type, 'danger');
+        try {
+            await api.delete(`/gas-records/${gas.id}/`);
+            addToast('Record deleted', 'info');
+            logActivity(user.username, 'deleted gas record for', gas.type, 'danger');
+            fetchGasRecords();
+        } catch (err) {
+             addToast('Failed to delete gas metric', 'danger');
+        }
     }
   };
+
+  const trendData = [
+    { name: 'Week 1', consumption: 400 },
+    { name: 'Week 2', consumption: 300 },
+    { name: 'Week 3', consumption: 550 },
+    { name: 'Week 4', consumption: 480 },
+  ];
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-heading font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>Usage Metrics</h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Monitor electricity and gas consumption</p>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Utility & Environmental Metrics</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Track gas levels, consumption, and sustainability metrics</p>
         </div>
-        <motion.button className="glass-btn-primary text-sm" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} 
-          onClick={() => { setEditingGasId(null); setGasForm(emptyGasForm); setIsModalOpen(true); }}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Log Gas Refill
-        </motion.button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-        <GlassCard className="!p-5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Estimated Electricity Cost (Month)</p>
-            <div className="flex items-end gap-3 mt-2">
-              <h3 className="text-4xl font-heading font-bold" style={{ color: 'var(--text-primary)' }}>₹42,500</h3>
-              <span className="text-xs font-medium pb-1 text-emerald-500">↓ 4% vs last month</span>
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <div><p className="text-[10px] uppercase text-gray-500 mb-1">Total Units</p><p className="font-medium">4,250 kWh</p></div>
-              <div><p className="text-[10px] uppercase text-gray-500 mb-1">Peak Load</p><p className="font-medium">45 kW</p></div>
-              <div><p className="text-[10px] uppercase text-gray-500 mb-1">Rate</p><p className="font-medium">₹10.0/unit</p></div>
-            </div>
-          </div>
-        </GlassCard>
-
-        <GlassCard className="!p-5 relative overflow-hidden">
-          <div className="absolute top-0 right-0 p-4 opacity-10">
-            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1"><path d="M21.54 15H17M21 12H16M21.54 9H17M11 20a6 6 0 0 1-6-6V6a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v8a6 6 0 0 1-6 6zM7 2h4"/></svg>
-          </div>
-          <div className="relative z-10">
-            <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Total Gas Expenses (Month)</p>
-            <div className="flex items-end gap-3 mt-2">
-              <h3 className="text-4xl font-heading font-bold" style={{ color: 'var(--text-primary)' }}>
-                ₹{gasData.reduce((acc, curr) => acc + (Number(curr.cost) || 0), 0).toLocaleString()}
-              </h3>
-              <span className="text-xs font-medium pb-1" style={{ color: 'var(--text-muted)' }}>Based on current logs</span>
-            </div>
-            <div className="mt-6 flex items-center justify-between">
-              <div><p className="text-[10px] uppercase text-gray-500 mb-1">Active Cylinders</p><p className="font-medium">{gasData.length}</p></div>
-              <div><p className="text-[10px] uppercase text-gray-500 mb-1">Upcoming Refills</p><p className="font-medium text-amber-500">{gasData.filter(g => getDaysUntil(g.refillDate) !== null && getDaysUntil(g.refillDate) <= 7).length} due soon</p></div>
-            </div>
-          </div>
-        </GlassCard>
-      </div>
-
-      <GlassCard className="!p-0 overflow-hidden">
-        <div className="p-4 border-b flex justify-between items-center" style={{ borderColor: 'var(--divider)' }}>
-          <h3 className="font-semibold text-sm uppercase tracking-wider" style={{ color: 'var(--text-primary)' }}>Gas Inventory & Logs</h3>
-        </div>
-        <div className="overflow-x-auto">
-          {gasData.length > 0 ? (
-            <table className="w-full">
-              <thead><tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)' }}>
-                {['Gas Type', 'Capacity', 'Current', 'Fill %', 'Refill Due', 'Cost', ''].map(h => (
-                  <th key={h} className={`text-left px-5 py-3 text-xs uppercase tracking-wider font-semibold ${['Capacity', 'Fill %', 'Cost'].includes(h) ? 'hidden md:table-cell' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
-              </tr></thead>
-              <tbody>
-                <AnimatePresence>
-                  {gasData.map((g, i) => {
-                    const fillPct = Math.round((g.currentLevel / g.capacity) * 100);
-                    const daysDue = getDaysUntil(g.refillDate);
-                    return (
-                      <motion.tr key={g.id} initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0 }} transition={{ delay: i * 0.05 }}
-                      style={{ borderBottom: '1px solid var(--divider)' }} className={`group hover:bg-black/5 dark:hover:bg-white/5 ${permissions.canEdit ? 'cursor-pointer' : 'cursor-default'}`}
-                        onClick={() => { if (!permissions.canEdit) return; setEditingGasId(g.id); setGasForm(g); setIsModalOpen(true); }}>
-                        <td className="px-5 py-3 font-medium" style={{ color: 'var(--text-primary)' }}>{g.type}</td>
-                        <td className="px-5 py-3 text-sm font-mono hidden md:table-cell">{g.capacity} L</td>
-                        <td className="px-5 py-3 text-sm font-mono text-cyan-500">{g.currentLevel} L</td>
-                        <td className="px-5 py-3 hidden md:table-cell">
-                          <div className="flex items-center gap-2">
-                            <div className="w-20 h-2 bg-gray-200 dark:bg-gray-800 rounded-full overflow-hidden">
-                              <div className="h-full rounded-full transition-all" style={{ width: `${Math.min(100, fillPct)}%`, background: fillPct > 50 ? '#10B981' : fillPct > 20 ? '#FACC15' : '#F43F5E' }} />
-                            </div>
-                            <span className="text-xs font-bold font-mono" style={{ color: fillPct > 50 ? '#10B981' : fillPct > 20 ? '#FACC15' : '#F43F5E' }}>{fillPct}%</span>
-                          </div>
-                        </td>
-                        <td className="px-5 py-3 text-sm">
-                          {daysDue !== null ? (
-                            <span className={`px-2 py-1 rounded text-xs font-bold ${daysDue <= 3 ? 'bg-red-500/20 text-red-500' : daysDue <= 7 ? 'bg-amber-500/20 text-amber-500' : 'bg-gray-500/10 text-gray-500'}`}>
-                              {daysDue < 0 ? 'Overdue' : daysDue === 0 ? 'Today' : `in ${daysDue} days`}
-                            </span>
-                          ) : <span className="text-gray-500">—</span>}
-                        </td>
-                        <td className="px-5 py-3 font-semibold text-right hidden md:table-cell" style={{ color: 'var(--text-primary)' }}>₹{g.cost || '0'}</td>
-                        <td className="px-5 py-3 text-right">
-                          {isAdmin && (
-                            <motion.button 
-                              className="p-1 rounded text-red-500 opacity-0 group-hover:opacity-100 transition-opacity hover:bg-red-500/10"
-                              whileTap={{ scale: 0.9 }}
-                              onClick={e => { e.stopPropagation(); deleteGas(g); }}
-                              title="Delete Record"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </motion.button>
-                          )}
-                        </td>
-                      </motion.tr>
-                    );
-                  })}
-                </AnimatePresence>
-              </tbody>
-            </table>
-          ) : (
-            <div className="p-8 text-center" style={{ color: 'var(--text-muted)' }}>No gas records tracked yet.</div>
-          )}
-        </div>
-      </GlassCard>
-
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingGasId ? "Edit Gas Record" : "Log Gas Refill"} size="sm">
-        <div className="space-y-4">
-          <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Gas Type *</label>
-            <select className="glass-input w-full" value={gasForm.type} onChange={gf('type')}>
-              {['Argon', 'Oxygen', 'Nitrogen', 'LPG'].map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Total Capacity (L) *</label><input type="number" className="glass-input w-full" value={gasForm.capacity} onChange={gf('capacity')} /></div>
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Current Level (L) *</label><input type="number" className="glass-input w-full" value={gasForm.currentLevel} onChange={gf('currentLevel')} /></div>
-          </div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Next Refill Target</label><input type="date" className="glass-input w-full text-sm" value={gasForm.refillDate} onChange={gf('refillDate')} /></div>
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Cost (₹)</label><input type="number" className="glass-input w-full" value={gasForm.cost} onChange={gf('cost')} placeholder="e.g. 1500" /></div>
-          </div>
-          <motion.button className="glass-btn-primary w-full justify-center p-3 mt-4" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={saveGas}>
-            {editingGasId ? "Save Changes" : "Save Record"}
+        {permissions.canCreate && (
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} 
+            onClick={() => { setEditingGasId(null); setGasForm(emptyGasForm); setIsModalOpen(true); }}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-orange-500/20 transition-colors flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4v16m8-8H4" /></svg>
+            Log Refill/Tank
           </motion.button>
+        )}
+      </div>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <GlassCard className="lg:col-span-2 !p-5">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Gas Cylinder Inventory</h3>
+          </div>
+          
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <AnimatePresence>
+              {loading ? (
+                 <div className="md:col-span-2 p-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Synchronizing Gas records...</div>
+              ) : gasData.length === 0 ? (
+                 <div className="md:col-span-2 p-8 text-center text-sm border-2 border-dashed rounded-xl" style={{ borderColor: 'var(--divider)', color: 'var(--text-muted)' }}>No tanks actively monitored.</div>
+              ) : gasData.map(gas => {
+                const pct = gas.capacity ? Math.round((gas.current_level / gas.capacity) * 100) : 0;
+                const days = getDaysUntil(gas.refill_date);
+                return (
+                  <motion.div key={gas.id} initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.9 }}
+                    className="relative p-5 rounded-xl border bg-black/5 dark:bg-white/5 transition-all outline outline-1 outline-transparent hover:outline-orange-500/30 group" 
+                    style={{ borderColor: 'var(--divider)' }}>
+                    
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <span className="px-2 py-1 bg-black/10 dark:bg-white/10 rounded text-[10px] uppercase tracking-wider font-bold" style={{ color: 'var(--text-primary)' }}>{gas.type}</span>
+                        <h4 className="text-xl font-bold mt-2 font-mono" style={{ color: 'var(--text-primary)' }}>{gas.current_level}<span className="text-sm font-sans font-normal text-gray-500 ml-1">/ {gas.capacity} L</span></h4>
+                      </div>
+                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        {permissions.canEdit && (
+                            <button onClick={() => { setEditingGasId(gas.id); setGasForm(gas); setIsModalOpen(true); }} className="p-1.5 bg-blue-500/10 text-blue-500 rounded hover:bg-blue-500 hover:text-white transition-colors" title="Edit"><svg w="14" h="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                        )}
+                        {permissions.canDelete && (
+                            <button onClick={() => deleteGas(gas)} className="p-1.5 bg-red-500/10 text-red-500 rounded hover:bg-red-500 hover:text-white transition-colors" title="Delete"><svg w="14" h="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/></svg></button>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="h-2 w-full bg-black/10 dark:bg-white/10 rounded-full overflow-hidden mb-2">
+                       <motion.div initial={{ width: 0 }} animate={{ width: `${pct}%` }} transition={{ duration: 1 }} className={`h-full rounded-full ${pct > 40 ? 'bg-emerald-500' : pct > 15 ? 'bg-orange-500' : 'bg-red-500'}`} />
+                    </div>
+                    
+                    <div className="flex justify-between items-center text-xs" style={{ color: 'var(--text-muted)' }}>
+                      <span>{pct}% Remaining</span>
+                      {days !== null && (
+                        <span className={`font-medium ${days <= 3 ? 'text-red-500' : ''}`}>
+                          {days < 0 ? 'Overdue' : days === 0 ? 'Refill Today' : `Refill in ${days}d`}
+                        </span>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </GlassCard>
+
+        <GlassCard className="flex flex-col h-full !p-5">
+          <h3 className="font-semibold mb-4" style={{ color: 'var(--text-primary)' }}>Monthly Consumption</h3>
+          <div className="flex-1 w-full relative -left-4 min-h-[200px]">
+             <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={trendData}>
+                 <defs>
+                   <linearGradient id="colorCons" x1="0" y1="0" x2="0" y2="1">
+                     <stop offset="5%" stopColor="#E8771A" stopOpacity={0.3}/>
+                     <stop offset="95%" stopColor="#E8771A" stopOpacity={0}/>
+                   </linearGradient>
+                 </defs>
+                 <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} padding={{ left: 10, right: 10 }} />
+                 <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--glass-border)', borderRadius: '8px' }} />
+                 <Area type="monotone" dataKey="consumption" stroke="#E8771A" strokeWidth={3} fillOpacity={1} fill="url(#colorCons)" />
+               </AreaChart>
+             </ResponsiveContainer>
+          </div>
+        </GlassCard>
+      </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title={editingGasId ? "Edit Gas Record" : "Add New Gas Record"}>
+        <div className="space-y-4">
+           <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Gas/Chemical Type</label>
+             <select value={gasForm.type} onChange={gf('type')} className="w-full bg-black/5 dark:bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}>
+               <option value="Argon">Argon</option><option value="LPG">LPG / Propane</option><option value="Nitrogen">Nitrogen</option><option value="Oxygen">Oxygen</option>
+             </select>
+           </div>
+           <div className="grid grid-cols-2 gap-4">
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Capacity Total (L/kg)</label><input type="number" value={gasForm.capacity} onChange={gf('capacity')} className="w-full bg-transparent border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}/></div>
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Current Level</label><input type="number" value={gasForm.current_level} onChange={gf('current_level')} className="w-full bg-transparent border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}/></div>
+           </div>
+           <div className="grid grid-cols-2 gap-4">
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Refill Due Date</label><input type="date" value={gasForm.refill_date} onChange={gf('refill_date')} className="w-full bg-transparent border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}/></div>
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Cost ($)</label><input type="number" value={gasForm.cost} onChange={gf('cost')} className="w-full bg-transparent border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}/></div>
+           </div>
+           
+           <button disabled={processing} onClick={saveGas} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 rounded-lg text-sm mt-4 transition-colors disabled:opacity-50">
+             {processing ? 'Saving Database...' : 'Save Record'}
+           </button>
         </div>
       </Modal>
     </div>

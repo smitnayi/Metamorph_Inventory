@@ -1,12 +1,14 @@
-import { useState, Fragment } from 'react';
+import { useState, useEffect, Fragment } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { DndContext, closestCenter, DragOverlay, useDroppable, useSensor, useSensors, PointerSensor } from '@dnd-kit/core';
 import { SortableContext, useSortable, verticalListSortingStrategy } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
-import { usePersistedState, useActivityFeed, useAuth } from '../store/useStore';
+import { useAuth, useActivityFeed } from '../store/useStore';
 import GlassCard from '../components/GlassCard';
 import Modal from '../components/Modal';
 import { useToast } from '../App';
+import { api } from '../services/api';
+import { Button } from '../components/ui/moving-border';
 
 const PRIORITIES = { low: '#10B981', medium: '#FACC15', high: '#F43F5E' };
 const COLUMNS = [
@@ -19,7 +21,7 @@ const COLUMNS = [
 const emptyTask = { title: '', description: '', priority: 'medium', assignee: '', status: 'todo' };
 
 function TaskCard({ task, overlay, onDelete }) {
-  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id });
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({ id: task.id.toString() });
   const style = {
     transform: CSS.Transform.toString(transform), transition,
     backgroundColor: 'var(--surface)', border: '1px solid var(--glass-border)',
@@ -27,13 +29,13 @@ function TaskCard({ task, overlay, onDelete }) {
     padding: '12px 14px', cursor: 'grab', position: 'relative'
   };
 
-  const { isAdmin } = useAuth();
+  const { permissions } = useAuth();
 
   const card = (
     <div ref={!overlay ? setNodeRef : undefined} className="group" style={overlay ? { ...style, opacity: 1, boxShadow: '0 12px 40px rgba(0,0,0,0.3)' } : style}
       {...(!overlay ? { ...attributes, ...listeners } : {})}>
       
-      {isAdmin && onDelete && (
+      {permissions.canDelete && onDelete && (
         <button
           onClick={(e) => { e.stopPropagation(); onDelete(task.id); }}
           className="absolute top-2 right-2 p-1.5 rounded-md opacity-0 group-hover:opacity-100 transition-opacity bg-red-500/10 text-red-500 hover:bg-red-500 hover:text-white z-10"
@@ -49,149 +51,185 @@ function TaskCard({ task, overlay, onDelete }) {
       <h4 className="font-semibold text-sm mb-1" style={{ color: 'var(--text-primary)' }}>{task.title}</h4>
       <p className="text-xs line-clamp-2 leading-relaxed mb-3" style={{ color: 'var(--text-muted)' }}>{task.description}</p>
       
-      <div className="flex justify-between items-center mt-auto pt-3" style={{ borderTop: '1px solid var(--divider)' }}>
-        <div className="flex -space-x-2">
-          <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2" 
-               style={{ background: 'linear-gradient(135deg, #00D4FF, #0077FF)', borderColor: 'var(--surface)' }}>{task.assignee.charAt(0) || 'U'}</div>
+      {task.assignee && (
+        <div className="flex items-center gap-2 mt-2 pt-3 border-t" style={{ borderColor: 'var(--divider)' }}>
+          <div className="w-5 h-5 rounded-full bg-orange-500/20 text-orange-500 flex items-center justify-center text-[10px] font-bold">
+            {task.assignee.charAt(0).toUpperCase()}
+          </div>
+          <span className="text-xs font-medium" style={{ color: 'var(--text-muted)' }}>{task.assignee}</span>
         </div>
-      </div>
+      )}
     </div>
   );
   return card;
 }
 
-function DroppableColumn({ column, tasks: colTasks, onOpenTask, onDeleteTask }) {
-  const { setNodeRef, isOver } = useDroppable({ id: column.id });
+function Column({ id, title, color, tasks, onDelete }) {
+  const { setNodeRef } = useDroppable({ id });
   return (
-    <div ref={setNodeRef} className="flex flex-col min-h-[300px]" style={{
-      background: isOver ? 'rgba(0, 212, 255, 0.05)' : 'transparent', borderRadius: '12px', transition: 'background 0.2s ease'
-    }}>
-      <div className="flex items-center justify-between mb-4 px-2">
+    <GlassCard className="flex flex-col h-full !p-3">
+      <div className="flex items-center justify-between px-2 mb-3">
         <div className="flex items-center gap-2">
-          <div className="w-3 h-3 rounded-full" style={{ background: column.color }} />
-          <h3 className="font-heading font-semibold text-sm tracking-wide" style={{ color: 'var(--text-primary)' }}>{column.title}</h3>
+          <div className="w-2.5 h-2.5 rounded-full" style={{ background: color, boxShadow: `0 0 8px ${color}80` }} />
+          <h3 className="font-bold text-sm uppercase tracking-wider text-gray-700 dark:text-gray-300">{title}</h3>
         </div>
-        <div className="px-2 py-0.5 rounded-full text-xs font-medium" style={{ background: 'var(--surface)', color: 'var(--text-muted)', border: '1px solid var(--glass-border)' }}>{colTasks.length}</div>
+        <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-full bg-black/10 dark:bg-white/10" style={{ color: 'var(--text-muted)' }}>{tasks.length}</span>
       </div>
-      <SortableContext items={colTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-        <div className="flex flex-col gap-2 flex-1">
-          {colTasks.map(task => (
-            <div key={task.id} onClick={() => onOpenTask(task)}><TaskCard task={task} onDelete={onDeleteTask} /></div>
-          ))}
-        </div>
-      </SortableContext>
-    </div>
+      <div ref={setNodeRef} className="flex-1 min-h-[150px] p-2 rounded-xl transition-colors" style={{ background: 'var(--surface-hover)' }}>
+        <SortableContext items={tasks.map(t => t.id.toString())} strategy={verticalListSortingStrategy}>
+          {tasks.map(task => <TaskCard key={task.id} task={task} onDelete={onDelete} />)}
+        </SortableContext>
+      </div>
+    </GlassCard>
   );
 }
 
 export default function TaskManager() {
-  const [tasks, setTasks] = usePersistedState('tasks', []);
-  const [modalOpen, setModalOpen] = useState(false);
-  const [detailTask, setDetailTask] = useState(null);
+  const [tasks, setTasks] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [newTask, setNewTask] = useState(emptyTask);
-  const [activeTask, setActiveTask] = useState(null);
+  const [activeId, setActiveId] = useState(null);
+  
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin, permissions } = useAuth();
+  const { permissions, user } = useAuth();
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 5 } }));
 
-  const handleDragStart = (e) => {
-    setActiveTask(tasks.find(t => t.id === e.active.id));
+  useEffect(() => {
+    fetchTasks();
+  }, []);
+
+  const fetchTasks = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get('/tasks/');
+      setTasks(data);
+    } catch (err) {
+      addToast('Failed to load tasks', 'danger');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDragEnd = (e) => {
-    setActiveTask(null);
-    const { active, over } = e;
+  const handleDragStart = (e) => setActiveId(e.active.id);
+
+  const handleDragEnd = async (event) => {
+    const { active, over } = event;
+    setActiveId(null);
     if (!over) return;
 
-    const activeTask = tasks.find(t => t.id === active.id);
+    const taskId = active.id;
     const overId = over.id;
-
-    const isOverColumn = COLUMNS.some(c => c.id === overId);
-    let newStatus = activeTask.status;
-
-    if (isOverColumn) { newStatus = overId; } 
-    else {
-      const overTask = tasks.find(t => t.id === overId);
-      if (overTask) newStatus = overTask.status;
+    
+    const taskIndex = tasks.findIndex(t => t.id.toString() === taskId.toString());
+    if (taskIndex === -1) return;
+    
+    // Check if dropping over a column or another task
+    let targetStatus = null;
+    if (COLUMNS.find(c => c.id === overId)) {
+      targetStatus = overId;
+    } else {
+      const overTask = tasks.find(t => t.id.toString() === overId.toString());
+      if (overTask) targetStatus = overTask.status;
     }
 
-    if (activeTask.status !== newStatus) {
-      setTasks(prev => prev.map(t => t.id === active.id ? { ...t, status: newStatus } : t));
-      logActivity('You', 'moved task', `"${activeTask.title}" to ${COLUMNS.find(c => c.id === newStatus).title}`, 'info');
+    if (targetStatus && targetStatus !== tasks[taskIndex].status) {
+      // Optimistic UI update
+      const prevTasks = [...tasks];
+      setTasks(prev => prev.map(t => t.id.toString() === taskId.toString() ? { ...t, status: targetStatus } : t));
+      
+      try {
+        await api.put(`/tasks/${taskId}/`, { ...tasks[taskIndex], status: targetStatus });
+        logActivity(user.username, `moved task to ${targetStatus}`, tasks[taskIndex].title, 'info');
+      } catch (err) {
+        setTasks(prevTasks); // Revert
+        addToast('Failed to move task', 'danger');
+      }
     }
   };
 
-  const handleDeleteTask = (id) => {
-    if (window.confirm('Delete this task?')) {
-      setTasks(prev => prev.filter(t => t.id !== id));
-      addToast('Task deleted', 'info');
+  const createTask = async () => {
+    if (!newTask.title.trim()) { addToast('Task title is required', 'warning'); return; }
+    
+    try {
+      await api.post('/tasks/', newTask);
+      addToast('Task created successfully', 'success');
+      logActivity(user.username, 'created new task', newTask.title, 'success');
+      setIsModalOpen(false);
+      setNewTask(emptyTask);
+      fetchTasks();
+    } catch (err) {
+      addToast('Failed to create task', 'danger');
     }
   };
 
-  const handleCreate = () => {
-    if (!newTask.title.trim()) { addToast('Task title is required.', 'warning'); return; }
-    const task = { id: `T${Date.now()}`, ...newTask };
-    setTasks(prev => [...prev, task]);
-    setModalOpen(false); setNewTask(emptyTask);
-    addToast('Task created successfully!', 'success');
-    logActivity('You', 'created a new task', task.title, 'success');
+  const deleteTask = async (id) => {
+    if (window.confirm("Are you sure you want to delete this task?")) {
+      try {
+          await api.delete(`/tasks/${id}/`);
+          addToast('Task deleted', 'info');
+          fetchTasks();
+      } catch (err) {
+          addToast('Failed to delete task', 'danger');
+      }
+    }
   };
-
-  const tasksByCol = COLUMNS.reduce((acc, col) => {
-    acc[col.id] = tasks.filter(t => t.status === col.id);
-    return acc;
-  }, {});
-
-  const f = (field) => (e) => setNewTask(prev => ({ ...prev, [field]: e.target.value }));
 
   return (
-    <div className="space-y-6 h-full flex flex-col">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto space-y-6 h-[calc(100vh-6rem)] flex flex-col">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 shrink-0">
         <div>
-          <h2 className="font-heading font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>Task Manager</h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Drag and drop tasks between columns</p>
+           <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Production Kanban</h1>
+           <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Drag and drop to track shop floor workflows</p>
         </div>
-        {isAdmin && (
-          <motion.button className="glass-btn-primary text-sm" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setModalOpen(true)}>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-            New Task
-          </motion.button>
+        {permissions.canCreate && (
+          <Button
+            duration={3000}
+            onClick={() => setIsModalOpen(true)}
+            containerClassName="w-40 h-10"
+            className="bg-zinc-900 border-zinc-800 text-white text-sm font-semibold flex items-center justify-center gap-2 hover:bg-zinc-800 transition-colors"
+          >
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 4v16m8-8H4"/></svg>
+            Add New Task
+          </Button>
         )}
       </div>
 
-      <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 flex-1 overflow-hidden">
-          {COLUMNS.map(col => (
-            <GlassCard key={col.id} hover={false} delay={0} className="!p-3 h-full overflow-y-auto hide-scrollbar">
-              <DroppableColumn column={col} tasks={tasksByCol[col.id]} onOpenTask={setDetailTask} onDeleteTask={handleDeleteTask} />
-            </GlassCard>
-          ))}
-        </div>
-        <DragOverlay>{activeTask ? <TaskCard task={activeTask} overlay onDelete={() => {}} /> : null}</DragOverlay>
-      </DndContext>
-
-      <Modal isOpen={modalOpen} onClose={() => setModalOpen(false)} title="Create New Task" size="md">
-        <div className="space-y-4">
-          <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Title *</label><input className="glass-input w-full" placeholder="What needs to be done?" value={newTask.title} onChange={f('title')} /></div>
-          <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Description</label><textarea className="glass-input w-full min-h-[100px]" placeholder="Add details..." value={newTask.description} onChange={f('description')} /></div>
-          <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Priority</label><select className="glass-input w-full" value={newTask.priority} onChange={f('priority')}><option value="low">Low</option><option value="medium">Medium</option><option value="high">High</option></select></div>
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Assign To</label><input className="glass-input w-full" placeholder="e.g. Smit" value={newTask.assignee} onChange={f('assignee')} /></div>
-          </div>
-          <motion.button className="glass-btn-primary w-full justify-center p-3 mt-4" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleCreate}>Create Task</motion.button>
-        </div>
-      </Modal>
-
-      <Modal isOpen={!!detailTask} onClose={() => setDetailTask(null)} title={detailTask?.title} size="md">
-        {detailTask && (
-          <div className="space-y-6">
-            <div className="flex items-center gap-3"><div className="px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider" style={{ background: `${PRIORITIES[detailTask.priority]}20`, color: PRIORITIES[detailTask.priority] }}>{detailTask.priority} Priority</div><div className="px-3 py-1 rounded-full text-xs font-medium" style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)', color: 'var(--text-primary)' }}>{COLUMNS.find(c => c.id === detailTask.status)?.title}</div></div>
-            <div><h4 className="text-xs font-medium uppercase mb-2" style={{ color: 'var(--text-muted)' }}>Description</h4><p className="text-sm leading-relaxed whitespace-pre-wrap" style={{ color: 'var(--text-primary)' }}>{detailTask.description || 'No description provided.'}</p></div>
-            <div className="pt-4 flex justify-end" style={{ borderTop: '1px solid var(--divider)' }}><button onClick={() => setDetailTask(null)} className="glass-btn px-6 py-2">Close</button></div>
+      <div className="flex-1 overflow-x-auto overflow-y-hidden pb-4">
+        {loading ? (
+           <div className="p-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Loading workflows...</div>
+        ) : (
+          <div className="flex h-full gap-4 min-w-[900px]">
+            <DndContext sensors={sensors} collisionDetection={closestCenter} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+              {COLUMNS.map(col => (
+                <div key={col.id} className="flex-1 min-w-[280px]">
+                  <Column id={col.id} title={col.title} color={col.color} tasks={tasks.filter(t => t.status === col.id)} onDelete={deleteTask} />
+                </div>
+              ))}
+              <DragOverlay>
+                {activeId ? <TaskCard task={tasks.find(t => t.id.toString() === activeId.toString())} overlay /> : null}
+              </DragOverlay>
+            </DndContext>
           </div>
         )}
+      </div>
+
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Create New Task">
+        <div className="space-y-4">
+           <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Task Title</label><input type="text" value={newTask.title} onChange={e => setNewTask({...newTask, title: e.target.value})} className="w-full bg-black/5 dark:bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="e.g. Prep Substrate Batch A" /></div>
+           <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Description</label><textarea value={newTask.description} onChange={e => setNewTask({...newTask, description: e.target.value})} rows="3" className="w-full bg-black/5 dark:bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="Any special requirements..." /></div>
+           <div className="grid grid-cols-2 gap-4">
+              <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Priority</label>
+                 <select value={newTask.priority} onChange={e => setNewTask({...newTask, priority: e.target.value})} className="w-full bg-black/5 dark:bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}>
+                   <option value="low">Low Priority</option><option value="medium">Medium Priority</option><option value="high">High Priority</option>
+                 </select>
+              </div>
+              <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Assignee</label><input type="text" value={newTask.assignee} onChange={e => setNewTask({...newTask, assignee: e.target.value})} className="w-full bg-black/5 dark:bg-white/5 border rounded-lg px-3 py-2 text-sm focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="e.g. John Doe" /></div>
+           </div>
+           <button onClick={createTask} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 rounded-lg text-sm mt-4 transition-colors">Create Task in Backlog</button>
+        </div>
       </Modal>
     </div>
   );

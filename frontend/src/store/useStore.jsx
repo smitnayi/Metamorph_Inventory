@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, createContext, useContext } from 'react';
+import { api } from '../services/api';
 
-// ─── localStorage helpers ───
+// ─── localStorage helpers (for theme/UI prefs only) ───
 function load(key, fallback) {
   try {
     const raw = localStorage.getItem(`mm_${key}`);
@@ -12,33 +13,10 @@ function save(key, value) {
   try { localStorage.setItem(`mm_${key}`, JSON.stringify(value)); } catch {}
 }
 
-// ─── Generic hook for a persisted array ───
 export function usePersistedState(key, fallback) {
   const [state, setState] = useState(() => load(key, fallback));
-
   useEffect(() => { save(key, state); }, [key, state]);
-
   return [state, setState];
-}
-
-// ─── Activity feed: auto-generated from actions ───
-export function useActivityFeed() {
-  const [feed, setFeed] = usePersistedState('activityFeed', []);
-
-  const logActivity = useCallback((user, action, target, type = 'info') => {
-    const entry = {
-      id: Date.now(),
-      user,
-      action,
-      target,
-      type,
-      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
-      timestamp: Date.now(),
-    };
-    setFeed((prev) => [entry, ...prev].slice(0, 50)); // keep last 50
-  }, [setFeed]);
-
-  return { feed, logActivity };
 }
 
 // ─── Theme context ───
@@ -50,135 +28,125 @@ export function useTheme() {
 
 export function useThemeState() {
   const [theme, setTheme] = usePersistedState('theme', 'dark');
-
   const toggleTheme = useCallback(() => {
     setTheme((prev) => (prev === 'dark' ? 'light' : 'dark'));
   }, [setTheme]);
-
   return { theme, toggleTheme };
 }
 
 // ═══════════════════════════════════════
-//  RBAC: Role-Based Access Control
+//  RBAC Matrix
 // ═══════════════════════════════════════
-
-// Permission matrix per role
 const ROLE_PERMISSIONS = {
   admin: {
     pages: ['/', '/powder-stock', '/tasks', '/quality', '/metrics', '/stickers', '/settings'],
-    canCreate: true,
-    canEdit: true,
-    canDelete: true,
-    canExport: true,
-    canManageTeam: true,
+    canCreate: true, canEdit: true, canDelete: true, canExport: true, canManageTeam: true,
   },
   operator: {
     pages: ['/', '/powder-stock', '/tasks', '/quality', '/metrics'],
-    canCreate: true,   // operators do data entry
-    canEdit: false,
-    canDelete: false,
-    canExport: false,
-    canManageTeam: false,
+    canCreate: true, canEdit: false, canDelete: false, canExport: false, canManageTeam: false,
   },
 };
 
-// Auth context — single source of truth for auth state
+// ═══════════════════════════════════════
+//  Auth Context (Hits Django + JWT)
+// ═══════════════════════════════════════
 export const AuthContext = createContext({
   user: null,
-  login: () => {},
+  login: async () => {},
   logout: () => {},
   isAdmin: false,
   permissions: ROLE_PERMISSIONS.operator,
   canAccess: () => false,
+  loading: true,
 });
 
-// Auth provider — wraps the entire app
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => load('user', null));
+  const [user, setUser] = useState(null);
+  const [loading, setLoading] = useState(true);
 
-  // Persist user to localStorage on change
-  useEffect(() => { save('user', user); }, [user]);
-
-  const login = useCallback((role) => {
-    const newUser = {
-      role,
-      name: role === 'admin' ? 'Admin / Supervisor' : 'Operator',
+  // Hydrate user on load
+  useEffect(() => {
+    const initAuth = async () => {
+      const token = localStorage.getItem('mm_access_token');
+      if (token) {
+        try {
+          const userData = await api.getMe();
+          setUser(userData);
+        } catch (err) {
+          console.error("Token expired or invalid", err);
+          api.logout();
+          setUser(null);
+        }
+      }
+      setLoading(false);
     };
-    setUser(newUser);
+    initAuth();
+  }, []);
+
+  const login = useCallback(async (username, password) => {
+    setLoading(true);
+    try {
+      await api.login(username, password);
+      const userData = await api.getMe();
+      setUser(userData);
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: err.message };
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   const logout = useCallback(() => {
+    api.logout();
     setUser(null);
   }, []);
 
   const isAdmin = user?.role === 'admin';
-  const permissions = ROLE_PERMISSIONS[user?.role] || ROLE_PERMISSIONS.operator;
+  const permissions = ROLE_PERMISSIONS[user?.role || 'operator'];
 
-  // Check if current role can access a specific page path
   const canAccess = useCallback((path) => {
     if (!user) return false;
     return permissions.pages.includes(path);
   }, [user, permissions]);
 
-  const value = {
-    user,
-    login,
-    logout,
-    isAdmin,
-    permissions,
-    canAccess,
-  };
+  const value = { user, login, logout, isAdmin, permissions, canAccess, loading };
 
   return (
     <AuthContext.Provider value={value}>
-      {children}
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
-// Hook to consume auth context
 export function useAuth() {
   return useContext(AuthContext);
 }
 
-// ─── Company info ───
-const defaultCompany = {
-  name: 'Metamorph Metal Protect LLP',
-  email: '',
-  phone: '',
-  location: '',
-};
-
-export function useCompanyInfo() {
-  return usePersistedState('companyInfo', defaultCompany);
+// UI notifications hook (local only)
+export function useActivityFeed() {
+  const [feed, setFeed] = usePersistedState('activityFeed', []);
+  const logActivity = useCallback((user, action, target, type = 'info') => {
+    const entry = {
+      id: Date.now(), user, action, target, type,
+      time: new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }),
+    };
+    setFeed((prev) => [entry, ...prev].slice(0, 50));
+  }, [setFeed]);
+  return { feed, logActivity };
 }
 
-// ─── Notification preferences ───
-const defaultNotifications = {
-  lowStock: true,
-  qualityFailures: true,
-  taskAssignments: true,
-  gasRefill: true,
-  dailySummary: false,
-  weeklyReport: true,
-};
+// UI preferences
+export function useCompanyInfo() { return usePersistedState('companyInfo', { name: 'Metamorph Metal Protect LLP' }); }
+export function useNotifications() { return usePersistedState('notifications', { lowStock: true, weeklyReport: true }); }
 
-export function useNotifications() {
-  return usePersistedState('notifications', defaultNotifications);
-}
-
-// ─── CSV export helper ───
+// Export helper
 export function exportCSV(filename, headers, rows) {
-  const csvContent = [
-    headers.join(','),
-    ...rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(',')),
-  ].join('\n');
-
+  const csvContent = [headers.join(','), ...rows.map(r => r.map(c => `"${String(c).replace(/"/g, '""')}"`).join(','))].join('\n');
   const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
-  link.href = url;
-  link.download = `${filename}_${new Date().toISOString().slice(0, 10)}.csv`;
-  link.click();
-  URL.revokeObjectURL(url);
+  link.href = url; link.download = `${filename}.csv`;
+  link.click(); URL.revokeObjectURL(url);
 }

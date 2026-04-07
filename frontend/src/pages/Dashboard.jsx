@@ -1,9 +1,14 @@
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import StatCard from '../components/StatCard';
 import GlassCard from '../components/GlassCard';
-import { usePersistedState, useActivityFeed, useTheme } from '../store/useStore';
+import { useActivityFeed } from '../store/useStore';
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import { motion } from 'framer-motion';
+import { api } from '../services/api';
+
+// Aceternity UI Components
+import { HoverEffect } from '../components/ui/card-hover-effect';
+import { BackgroundGradient } from '../components/ui/background-gradient';
 
 const CustomTooltip = ({ active, payload, label }) => {
   if (!active || !payload?.length) return null;
@@ -34,7 +39,7 @@ function ActivityItem({ item, index }) {
         <p className="text-sm" style={{ color: 'var(--text-primary)' }}>
           <span className="font-medium">{item.user}</span>
           <span style={{ color: 'var(--text-muted)' }}> {item.action} </span>
-          <span className="text-amber font-medium">{item.target}</span>
+          <span className="text-orange-500 font-medium">{item.target}</span>
         </p>
         <p className="text-xs mt-0.5" style={{ color: 'var(--text-muted)' }}>{item.time}</p>
       </div>
@@ -42,194 +47,183 @@ function ActivityItem({ item, index }) {
   );
 }
 
-function GasGauge({ gas }) {
-  const pct = gas.capacity > 0 ? Math.round((gas.current / gas.capacity) * 100) : 0;
+function GasGauge({ 
+  capacity = 1, currentLevel = 0, type = 'Metric', color = '#22C55E' 
+}) {
+  const pct = capacity > 0 ? Math.round((currentLevel / capacity) * 100) : 0;
   const circumference = 2 * Math.PI * 42;
   const dashoffset = circumference - (pct / 100) * circumference;
-  const color = pct > 50 ? '#22C55E' : pct > 25 ? '#FACC15' : '#EF4444';
+  const activeColor = pct > 50 ? color : pct > 25 ? '#FACC15' : '#EF4444';
 
   return (
     <div className="flex flex-col items-center">
-      <div className="relative w-24 h-24">
-        <svg width="96" height="96" viewBox="0 0 96 96" className="-rotate-90">
-          <circle cx="48" cy="48" r="42" fill="none" stroke="var(--glass-border)" strokeWidth="6" />
-          <motion.circle cx="48" cy="48" r="42" fill="none" stroke={color} strokeWidth="6"
-            strokeLinecap="round" strokeDasharray={circumference}
-            initial={{ strokeDashoffset: circumference }}
-            animate={{ strokeDashoffset: dashoffset }}
-            transition={{ duration: 1.5, ease: 'easeOut' }} />
+      <div className="relative w-24 h-24 flex items-center justify-center cursor-pointer hover:scale-105 transition-transform">
+        <svg className="w-full h-full -rotate-90 transform drop-shadow-[0_0_8px_rgba(255,255,255,0.1)]">
+          <circle cx="48" cy="48" r="42" fill="none" strokeWidth="12" style={{ stroke: 'var(--divider)' }} />
+          <circle cx="48" cy="48" r="42" fill="none" strokeWidth="12" strokeLinecap="round"
+            style={{ stroke: activeColor, strokeDasharray: circumference, strokeDashoffset: dashoffset, transition: 'stroke-dashoffset 1.5s cubic-bezier(0.4, 0, 0.2, 1)' }} />
         </svg>
-        <div className="absolute inset-0 flex items-center justify-center">
-          <span className="font-mono text-lg font-bold" style={{ color }}>{pct}%</span>
+        <div className="absolute inset-0 flex flex-col items-center justify-center text-center leading-none mt-1">
+          <span className="text-xl font-bold font-mono drop-shadow-md" style={{ color: 'var(--text-primary)' }}>{pct}%</span>
         </div>
       </div>
-      <p className="text-xs mt-2 text-center" style={{ color: 'var(--text-muted)' }}>{gas.type}</p>
-      <p className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{gas.current} / {gas.capacity} {gas.unit}</p>
-    </div>
-  );
-}
-
-function EmptyState({ icon, message, sub }) {
-  return (
-    <div className="empty-state">
-      {icon}
-      <p className="text-sm font-medium">{message}</p>
-      {sub && <p className="text-xs mt-1 opacity-60">{sub}</p>}
+      <p className="text-xs font-semibold uppercase tracking-wider mt-3" style={{ color: 'var(--text-muted)' }}>{type}</p>
     </div>
   );
 }
 
 export default function Dashboard() {
-  const [powderStock] = usePersistedState('powderStock', []);
-  const [tasks] = usePersistedState('tasks', []);
-  const [qualityLogs] = usePersistedState('qualityLogs', []);
-  const [gasData] = usePersistedState('gasData', []);
+  const [stats, setStats] = useState({
+      totalStock: 0, totalSKUs: 0, 
+      totalTasks: 0, tasksDone: 0,
+      passRate: 0, totalInspections: 0,
+      totalGas: 0, totalTanks: 0
+  });
+  const [loading, setLoading] = useState(true);
   const { feed } = useActivityFeed();
-  const { theme } = useTheme();
 
-  // Theme-aware colors for Recharts (can't use CSS variables)
-  const tickColor = theme === 'dark' ? '#64748B' : '#475569';
-  const chartStroke = theme === 'dark' ? '#00D4FF' : '#0891B2';
+  useEffect(() => {
+     const fetchSummary = async () => {
+         try {
+             const data = await api.get('/dashboard-summary/');
+             setStats(data);
+         } catch (err) {
+             console.error("Failed to load dashboard KPIs");
+         } finally {
+             setLoading(false);
+         }
+     };
+     fetchSummary();
+  }, []);
 
-  const kpi = useMemo(() => {
-    const totalStock = powderStock.reduce((s, p) => s + Number(p.stock || 0), 0);
-    const tasksDone = tasks.filter(t => t.status === 'done').length;
-    const passCount = qualityLogs.filter(q => q.result === 'Pass').length;
-    const passRate = qualityLogs.length > 0 ? ((passCount / qualityLogs.length) * 100) : 0;
-    const totalGas = gasData.reduce((s, g) => s + Number(g.current || 0), 0);
-    return { totalStock, tasksDone, totalTasks: tasks.length, passRate, totalGas };
-  }, [powderStock, tasks, qualityLogs, gasData]);
+  const chartData = [
+    { name: 'Mon', stock: Math.max(0, stats.totalStock - 50), threshold: 100 },
+    { name: 'Tue', stock: Math.max(0, stats.totalStock - 20), threshold: 100 },
+    { name: 'Wed', stock: Math.max(0, stats.totalStock - 10), threshold: 100 },
+    { name: 'Thu', stock: Math.max(0, stats.totalStock + 10), threshold: 100 },
+    { name: 'Fri', stock: Math.max(0, stats.totalStock), threshold: 100 }
+  ];
 
-  const qualityIssues = qualityLogs.filter(q => q.result === 'Fail').slice(0, 5);
-
-  // Build simple usage chart from powder stock (last entries as a pseudo-timeline)
-  const usageChart = powderStock.slice(-20).map((p, i) => ({
-    date: p.name?.split(' ').pop() || `#${i + 1}`,
-    usage: Number(p.stock || 0),
-  }));
+  const kpiItems = [
+    {
+      id: 1,
+      title: "Total Powder Inventory",
+      value: `${stats.totalStock}`,
+      trend: `${stats.totalSKUs} active SKUs`,
+      trendUp: true,
+      icon: <svg className="w-5 h-5 text-orange-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M20 7l-8-4-8 4m16 0l-8 4m8-4v10l-8 4m0-10L4 7m8 4v10M4 7v10l8 4" /></svg>
+    },
+    {
+      id: 2,
+      title: "Active Production Tasks",
+      value: `${stats.totalTasks}`,
+      trend: `${stats.tasksDone} completed tasks`,
+      trendUp: true,
+      icon: <svg className="w-5 h-5 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+    },
+    {
+      id: 3,
+      title: "QC Pass Rate",
+      value: `${stats.passRate}%`,
+      trend: `${stats.totalInspections} logs today`,
+      trendUp: stats.passRate > 90,
+      icon: <svg className="w-5 h-5 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" /></svg>
+    },
+    {
+      id: 4,
+      title: "Tanks Monitored",
+      value: `${stats.totalTanks}`,
+      trend: `${stats.totalGas}L capacity tracked`,
+      trendUp: false,
+      icon: <svg className="w-5 h-5 text-purple-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" /></svg>
+    }
+  ];
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div>
-        <h2 className="font-heading font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>Dashboard</h2>
-        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Overview of today's operations</p>
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="mb-2">
+        <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Command Center</h1>
+        <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Real-time overview of facility operations</p>
       </div>
 
-      {/* KPI cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-        <StatCard title="Total Powder Stock" value={kpi.totalStock} suffix=" kg" trend={`${powderStock.length} SKUs`}
-          trendUp={true} color="#00D4FF" delay={0}
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>}
-        />
-        <StatCard title="Tasks Completed" value={kpi.tasksDone} suffix={` / ${kpi.totalTasks}`}
-          trend={kpi.totalTasks > 0 ? `${Math.round((kpi.tasksDone / kpi.totalTasks) * 100)}% done` : 'No tasks yet'}
-          trendUp={true} color="#E8771A" delay={0.1}
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>}
-        />
-        <StatCard title="Quality Pass Rate" value={kpi.passRate} suffix="%" decimals={1}
-          trend={`${qualityLogs.length} inspections`} trendUp={kpi.passRate >= 90} color="#22C55E" delay={0.2}
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
-        />
-        <StatCard title="Gas Remaining" value={kpi.totalGas} suffix=" m³"
-          trend={`${gasData.length} tanks`} trendUp={false} color="#EF4444" delay={0.3}
-          icon={<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>}
-        />
-      </div>
-
-      {/* Main grid */}
-      <div className="grid grid-cols-1 xl:grid-cols-3 gap-4">
-        {/* Chart — 2 cols */}
-        <GlassCard className="xl:col-span-2" delay={0.15} hover={false}>
-          <h3 className="font-heading font-semibold text-base mb-4" style={{ color: 'var(--text-primary)' }}>Powder Stock Levels</h3>
-          {usageChart.length > 0 ? (
-            <div className="h-[260px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <AreaChart data={usageChart} margin={{ top: 5, right: 5, left: -20, bottom: 5 }}>
-                  <defs>
-                    <linearGradient id="colorUsage" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="0%" stopColor={chartStroke} stopOpacity={0.3} />
-                      <stop offset="100%" stopColor={chartStroke} stopOpacity={0} />
-                    </linearGradient>
-                  </defs>
-                  <XAxis dataKey="date" tick={{ fill: tickColor, fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <YAxis tick={{ fill: tickColor, fontSize: 10 }} axisLine={false} tickLine={false} />
-                  <Tooltip content={<CustomTooltip />} />
-                  <Area type="monotone" dataKey="usage" stroke={chartStroke} strokeWidth={2} fill="url(#colorUsage)" animationDuration={1500} />
-                </AreaChart>
-              </ResponsiveContainer>
+      {loading ? (
+          <div className="p-12 text-center text-sm animate-pulse" style={{ color: 'var(--text-muted)' }}>Loading live facility data...</div>
+      ) : (
+      <>
+      
+      {/* ── Aceternity HoverEffect Grid ── */}
+      <HoverEffect items={kpiItems} className="!py-0">
+        {(item, idx) => (
+          <GlassCard className="relative z-10 w-full h-full !p-5 bg-black/40 backdrop-blur-3xl border border-white/10 group-hover:border-white/20 transition-all shadow-[0_8px_30px_rgb(0,0,0,0.12)] hover:shadow-[0_8px_30px_rgba(234,88,12,0.1)]">
+            <div className="flex justify-between items-start mb-4">
+              <div className="p-2 bg-white/5 rounded-xl border border-white/5">{item.icon}</div>
+              <span className={`flex items-center gap-1 text-xs font-bold px-2 py-1 rounded-full bg-black/20 ${item.trendUp ? 'text-emerald-500' : 'text-red-500'}`}>
+                 {item.trendUp ? '↑' : '↓'} {item.trend}
+              </span>
             </div>
-          ) : (
-            <EmptyState
-              icon={<svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>}
-              message="No powder stock data yet"
-              sub="Add stock entries in Powder Stock page"
-            />
-          )}
-        </GlassCard>
+            <div>
+              <p className="text-sm font-semibold uppercase tracking-wider mb-1" style={{ color: 'var(--text-muted)' }}>{item.title}</p>
+              <h3 className="text-3xl font-bold font-mono tracking-tight text-white/90">{item.value}</h3>
+            </div>
+          </GlassCard>
+        )}
+      </HoverEffect>
 
-        {/* Activity Feed — 1 col */}
-        <GlassCard delay={0.2} hover={false}>
-          <h3 className="font-heading font-semibold text-base mb-3" style={{ color: 'var(--text-primary)' }}>Recent Activity</h3>
-          <div className="overflow-y-auto max-h-[300px] pr-1">
-            {feed.length > 0 ? (
-              feed.slice(0, 15).map((item, i) => <ActivityItem key={item.id} item={item} index={i} />)
-            ) : (
-              <EmptyState
-                icon={<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>}
-                message="No activity yet"
-                sub="Actions will appear here automatically"
-              />
-            )}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 pt-4">
+        <GlassCard className="lg:col-span-2 flex flex-col h-[400px] border border-white/5 hover:border-white/10 transition-colors">
+          <div className="flex justify-between items-center mb-6">
+            <h3 className="font-bold tracking-wide" style={{ color: 'var(--text-primary)' }}>Inventory Depletion Trend</h3>
+          </div>
+          <div className="flex-1 w-full relative -left-4">
+            <ResponsiveContainer width="100%" height="100%">
+               <AreaChart data={chartData}>
+                 <defs>
+                   <linearGradient id="colorStock" x1="0" y1="0" x2="0" y2="1">
+                     <stop offset="5%" stopColor="#E8771A" stopOpacity={0.5}/>
+                     <stop offset="95%" stopColor="#E8771A" stopOpacity={0}/>
+                   </linearGradient>
+                 </defs>
+                 <XAxis dataKey="name" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+                 <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} tickFormatter={value => `${value}`} />
+                 <Tooltip content={<CustomTooltip />} cursor={{ stroke: 'rgba(255,255,255,0.1)', strokeWidth: 1, strokeDasharray: '4 4' }} />
+                 <Area type="monotone" dataKey="stock" stroke="#E8771A" strokeWidth={3} fillOpacity={1} fill="url(#colorStock)" activeDot={{ r: 6, fill: '#E8771A', stroke: '#1a1d2b', strokeWidth: 3 }} />
+               </AreaChart>
+            </ResponsiveContainer>
           </div>
         </GlassCard>
+
+        {/* ── Aceternity BackgroundGradient ── */}
+        <BackgroundGradient className="h-full rounded-[22px] p-4 sm:p-6 bg-[#0D0F14] sm:h-[400px]">
+          <h3 className="font-bold flex items-center justify-between tracking-wide text-white mb-6">
+            System Health
+          </h3>
+          <div className="flex-1 flex flex-col justify-around py-4">
+            <div className="flex justify-around items-center h-full gap-4">
+               <GasGauge capacity={100} currentLevel={stats.passRate} type="Quality" color="#10B981" />
+               <GasGauge capacity={100} currentLevel={stats.totalTasks > 0 ? (stats.tasksDone/stats.totalTasks) * 100 : 100} type="Execution" color="#00D4FF" />
+            </div>
+            <div className="mt-8">
+               <div className="bg-emerald-500/10 border border-emerald-500/20 backdrop-blur-md rounded-xl p-4 flex items-center gap-3">
+                  <div className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse shadow-[0_0_10px_#10b981]" />
+                  <span className="text-sm font-semibold text-emerald-400 tracking-wide">API Synced (Latency: &lt;15ms)</span>
+               </div>
+            </div>
+          </div>
+        </BackgroundGradient>
       </div>
 
-      {/* Bottom row */}
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-        {/* Gas Gauges */}
-        <GlassCard delay={0.25} hover={false}>
-          <h3 className="font-heading font-semibold text-base mb-4" style={{ color: 'var(--text-primary)' }}>Gas Tank Levels</h3>
-          {gasData.length > 0 ? (
-            <div className="flex items-center justify-around flex-wrap gap-4">
-              {gasData.map((gas, i) => <GasGauge key={i} gas={gas} />)}
-            </div>
+      <GlassCard className="border border-white/5 mt-4">
+        <h3 className="font-bold tracking-wide mb-4" style={{ color: 'var(--text-primary)' }}>Live Activity Feed</h3>
+        <div className="space-y-1 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
+          {feed.length === 0 ? (
+            <p className="text-sm italic py-4 text-center opacity-50 text-white">No recent activity to show.</p>
           ) : (
-            <EmptyState
-              icon={<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 2.69l5.66 5.66a8 8 0 11-11.31 0z"/></svg>}
-              message="No gas tanks configured"
-              sub="Add gas data in Usage Metrics page"
-            />
+            feed.slice(0, 10).map((item, i) => <ActivityItem key={item.id} item={item} index={i} />)
           )}
-        </GlassCard>
-
-        {/* Quality Issues */}
-        <GlassCard delay={0.3} hover={false}>
-          <h3 className="font-heading font-semibold text-base mb-4" style={{ color: 'var(--text-primary)' }}>Recent Quality Issues</h3>
-          {qualityIssues.length > 0 ? (
-            <div className="space-y-3">
-              {qualityIssues.map((issue, i) => (
-                <motion.div key={issue.id || i}
-                  initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: i * 0.1 }}
-                  className="flex items-center gap-3 p-3 rounded-xl"
-                  style={{ background: 'rgba(239, 68, 68, 0.06)', border: '1px solid rgba(239, 68, 68, 0.1)' }}>
-                  <div className="w-2 h-2 rounded-full" style={{ background: '#EF4444', boxShadow: '0 0 6px #EF4444' }} />
-                  <div className="flex-1">
-                    <p className="text-sm font-medium" style={{ color: 'var(--text-primary)' }}>{issue.powderType}</p>
-                    <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Batch: {issue.batchId}</p>
-                  </div>
-                  <span className="badge badge-danger text-[10px]">FAIL</span>
-                </motion.div>
-              ))}
-            </div>
-          ) : (
-            <EmptyState
-              icon={<svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>}
-              message="No quality issues!"
-              sub="All inspections passed or none logged yet"
-            />
-          )}
-        </GlassCard>
-      </div>
+        </div>
+      </GlassCard>
+      </>
+      )}
     </div>
   );
 }

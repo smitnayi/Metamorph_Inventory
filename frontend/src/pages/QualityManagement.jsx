@@ -1,10 +1,11 @@
-import { useState, Fragment } from 'react';
+import { useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
 import GlassCard from '../components/GlassCard';
 import Modal from '../components/Modal';
-import { usePersistedState, useActivityFeed, useAuth } from '../store/useStore';
+import { useAuth, useActivityFeed } from '../store/useStore';
 import { useToast } from '../App';
+import { api } from '../services/api';
 
 function ResultBadge({ result }) {
   return result === 'Pass'
@@ -18,18 +19,40 @@ const trendData = [
 ];
 
 export default function QualityManagement() {
-  const [logs, setLogs] = usePersistedState('qualityLogs', []);
+  const [logs, setLogs] = useState([]);
+  const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [filter, setFilter] = useState('All');
+  const [processing, setProcessing] = useState(false);
+  
   const addToast = useToast();
   const { logActivity } = useActivityFeed();
-  const { isAdmin, permissions } = useAuth();
+  const { permissions, user } = useAuth();
 
-  const [newLog, setNewLog] = useState({
-    batchId: '', powderType: '', inspector: '', date: new Date().toISOString().slice(0, 10),
+  const emptyLog = {
+    batch_id: '', powder_type: '', inspector: user?.username || '', 
+    date: new Date().toISOString().slice(0, 10),
     thickness: '', adhesion: '5B', visual: 'OK', notes: '', result: 'Pass'
-  });
+  };
+  
+  const [newLog, setNewLog] = useState(emptyLog);
+
+  useEffect(() => {
+    fetchLogs();
+  }, []);
+
+  const fetchLogs = async () => {
+    try {
+      setLoading(true);
+      const res = await api.get('/qc-reports/');
+      setLogs(res);
+    } catch (err) {
+      addToast('Failed to load QC logs from server', 'danger');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const filteredLogs = logs.filter(log => {
     if (filter === 'All') return true;
@@ -38,164 +61,183 @@ export default function QualityManagement() {
 
   const passRate = logs.length > 0 ? Math.round((logs.filter(l => l.result === 'Pass').length / logs.length) * 100) : 100;
 
-  const handleSave = () => {
-    const result = (newLog.visual === 'Mottling' || newLog.visual === 'Pinholes' || newLog.adhesion.includes('B') && parseInt(newLog.adhesion) < 4) ? 'Fail' : 'Pass';
-    if (!newLog.batchId.trim()) { addToast('Batch ID is required.', 'warning'); return; }
-    const entry = { id: `QC-${String(logs.length + 1).padStart(3, '0')}`, ...newLog, result };
-    setLogs(prev => [entry, ...prev]);
-    setIsModalOpen(false);
-    setNewLog({ batchId: '', powderType: '', inspector: '', date: new Date().toISOString().slice(0, 10), thickness: '', adhesion: '5B', visual: 'OK', notes: '', result: 'Pass' });
-    addToast(`Inspection logged — ${result}!`, result === 'Pass' ? 'success' : 'warning');
-    logActivity('You', `logged ${result} inspection for`, newLog.batchId, result === 'Pass' ? 'success' : 'danger');
-  };
-
-  const handleDelete = (id) => {
-    if (window.confirm('Are you sure you want to delete this inspection log?')) {
-      setLogs(prev => prev.filter(log => log.id !== id));
-      addToast('Inspection log deleted.', 'info');
-      logActivity('You', 'deleted an inspection log', id, 'danger');
+  const handleSave = async () => {
+    const isFail = (newLog.visual === 'Mottling' || newLog.visual === 'Pinholes' || (newLog.adhesion.includes('B') && parseInt(newLog.adhesion) < 4));
+    const finalResult = isFail ? 'Fail' : 'Pass';
+    
+    if (!newLog.batch_id.trim()) { addToast('Batch ID is required.', 'warning'); return; }
+    
+    setProcessing(true);
+    try {
+        const payload = { ...newLog, result: finalResult };
+        await api.post('/qc-reports/', payload);
+        
+        setIsModalOpen(false);
+        setNewLog(emptyLog);
+        addToast(`Inspection logged — ${finalResult}!`, finalResult === 'Pass' ? 'success' : 'warning');
+        logActivity(user.username, `logged ${finalResult} inspection for`, newLog.batch_id, finalResult === 'Pass' ? 'success' : 'danger');
+        
+        fetchLogs();
+    } catch (err) {
+        addToast('Failed to save QC Report', 'danger');
+    } finally {
+        setProcessing(false);
     }
   };
 
-  const nf = (field) => (e) => setNewLog(prev => ({ ...prev, [field]: e.target.value }));
+  const handleDelete = async (id, batchId) => {
+    if(window.confirm('Are you sure you want to delete this QC report?')) {
+        try {
+            await api.delete(`/qc-reports/${id}/`);
+            addToast('QC Report deleted', 'info');
+            fetchLogs();
+        } catch (err) {
+             addToast('Failed to delete report', 'danger');
+        }
+    }
+  }
 
   return (
-    <div className="space-y-6 max-w-[1400px] mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="max-w-7xl mx-auto space-y-6">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
-          <h2 className="font-heading font-bold text-2xl" style={{ color: 'var(--text-primary)' }}>Quality Management</h2>
-          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Inspection logs and quality trends</p>
+          <h1 className="text-2xl font-bold tracking-tight" style={{ color: 'var(--text-primary)' }}>Quality Management</h1>
+          <p className="text-sm mt-1" style={{ color: 'var(--text-muted)' }}>Monitor part inspections and QC metrics</p>
         </div>
-        <motion.button className="glass-btn-primary text-sm shadow-xl" whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }} onClick={() => setIsModalOpen(true)}>
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-          Log Inspection
-        </motion.button>
+        {permissions.canCreate && (
+          <motion.button whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={() => setIsModalOpen(true)}
+            className="bg-orange-500 hover:bg-orange-600 text-white px-5 py-2.5 rounded-xl text-sm font-semibold shadow-lg shadow-orange-500/20 transition-colors flex items-center gap-2">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+            Log New Inspection
+          </motion.button>
+        )}
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-        <GlassCard className="!p-5">
-          <p className="text-xs uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Pass Rate (All Time)</p>
-          <div className="flex items-end gap-3 mt-2">
-            <h3 className="text-4xl font-heading font-bold" style={{ color: passRate < 90 ? '#F43F5E' : '#10B981' }}>{passRate}%</h3>
-            <span className="text-xs font-medium pb-1" style={{ color: 'var(--text-muted)' }}>{logs.filter(l => l.result === 'Pass').length}/{logs.length} passing</span>
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
+        <GlassCard className="md:col-span-4 flex flex-col justify-center">
+          <p className="text-sm font-medium mb-1 text-center" style={{ color: 'var(--text-muted)' }}>Overall Pass Rate</p>
+          <div className="text-5xl font-bold font-mono text-center flex items-center justify-center gap-2" style={{ color: passRate < 95 ? '#EF4444' : '#10B981' }}>
+            {passRate}%
+            {passRate < 95 ? <svg className="w-8 h-8 text-red-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 17h8m0 0V9m0 8l-8-8-4 4-6-6" /></svg> : <svg className="w-8 h-8 text-emerald-500" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6" /></svg>}
           </div>
+          <p className="text-xs text-center mt-2" style={{ color: 'var(--text-muted)' }}>Total Inspections: {logs.length}</p>
         </GlassCard>
-        
-        <GlassCard className="!p-5 col-span-1 md:col-span-2 flex flex-col">
-          <p className="text-xs uppercase font-semibold mb-3 shrink-0" style={{ color: 'var(--text-muted)' }}>Last 7 Days Trend</p>
-          <div className="flex-1 min-h-[100px] w-full mt-2">
+
+        <GlassCard className="md:col-span-8 h-[160px] !p-4 flex flex-col">
+          <p className="text-sm font-medium mb-2" style={{ color: 'var(--text-muted)' }}>Weekly QC Pass/Fail Trend</p>
+          <div className="flex-1 w-full relative -left-4">
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={trendData}>
-                <XAxis dataKey="day" hide />
-                <YAxis hide domain={['auto', 'auto']} />
-                <Tooltip contentStyle={{ background: 'var(--modal-bg)', border: '1px solid var(--glass-border)', borderRadius: '8px', color: 'var(--text-primary)' }} />
-                <Line type="monotone" dataKey="passes" stroke="#10B981" strokeWidth={3} dot={{ r: 4, fill: '#10B981' }} activeDot={{ r: 6 }} />
-                <Line type="monotone" dataKey="fails" stroke="#F43F5E" strokeWidth={2} dot={{ r: 3, fill: '#F43F5E' }} />
+                <Tooltip contentStyle={{ background: 'var(--surface)', border: '1px solid var(--glass-border)', borderRadius: '8px' }} itemStyle={{ fontSize: '12px' }} />
+                <Line type="monotone" dataKey="passes" stroke="#10B981" strokeWidth={3} dot={{ r: 3, fill: '#10B981' }} activeDot={{ r: 5 }} />
+                <Line type="monotone" dataKey="fails" stroke="#EF4444" strokeWidth={3} dot={{ r: 3, fill: '#EF4444' }} activeDot={{ r: 5 }} />
               </LineChart>
             </ResponsiveContainer>
           </div>
         </GlassCard>
       </div>
 
-      <div className="flex gap-2">
-        {['All', 'Pass', 'Fail'].map(f => (
-          <motion.button key={f} className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${filter === f ? 'bg-orange-500/20 text-orange-500 border border-orange-500/30' : 'glass-btn'}`}
-            onClick={() => setFilter(f)} whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}>{f}</motion.button>
-        ))}
-      </div>
-
       <GlassCard className="overflow-hidden !p-0">
+        <div className="p-4 border-b flex flex-col sm:flex-row justify-between items-center gap-4" style={{ borderColor: 'var(--divider)', background: 'var(--surface-hover)' }}>
+          <h3 className="font-semibold" style={{ color: 'var(--text-primary)' }}>Inspection History</h3>
+          <div className="flex gap-2 bg-black/5 dark:bg-white/5 p-1 rounded-lg w-full sm:w-auto" style={{ border: '1px solid var(--divider)' }}>
+            {['All', 'Pass', 'Fail'].map(f => (
+              <button key={f} onClick={() => setFilter(f)}
+                className={`px-4 py-1.5 rounded-md text-xs font-semibold uppercase tracking-wider transition-all flex-1 sm:flex-none ${filter === f ? (f === 'Pass' ? 'bg-emerald-500 text-white shadow-md' : f === 'Fail' ? 'bg-red-500 text-white shadow-md' : 'bg-gray-500 text-white shadow-md') : 'hover:bg-black/5 dark:hover:bg-white/5'}`}
+                style={filter !== f ? { color: 'var(--text-muted)' } : {}}>{f}</button>
+            ))}
+          </div>
+        </div>
+        
         <div className="overflow-x-auto">
-          <table className="w-full text-left border-collapse">
-            <thead>
-              <tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)' }}>
-                {['Batch ID', 'Powder Type', 'Date', 'Result', 'Notes', ''].map((h, i) => (
-                  <th key={i} className={`px-5 py-4 text-xs font-semibold uppercase tracking-wider ${['Date', 'Notes'].includes(h) ? 'hidden md:table-cell' : ''}`} style={{ color: 'var(--text-muted)' }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {filteredLogs.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center" style={{ color: 'var(--text-muted)' }}>
-                    {logs.length === 0 ? "No quality inspections logged yet." : "No logs matching this filter."}
-                  </td>
+          {loading ? (
+             <div className="p-12 text-center text-sm" style={{ color: 'var(--text-muted)' }}>Fetching QC reports securely...</div>
+          ) : logs.length > 0 ? (
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr style={{ background: 'var(--surface-hover)', borderBottom: '1px solid var(--divider)', color: 'var(--text-muted)' }}>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px]">Batch ID</th>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px]">Powder</th>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px] hidden lg:table-cell">Inspector</th>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px] hidden sm:table-cell">Date</th>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px]">Result</th>
+                  <th className="px-5 py-3 font-semibold uppercase tracking-wider text-[11px] text-right">Details</th>
                 </tr>
-              ) : (
-                filteredLogs.map((log, i) => (
-                  <Fragment key={log.id}>
-                    <motion.tr initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: i * 0.03 }}
-                      className="cursor-pointer" style={{ borderBottom: '1px solid var(--divider)' }}
-                      onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}
-                      whileHover={{ backgroundColor: 'var(--surface-hover)' }}>
-                      <td className="px-5 py-3 text-sm font-mono" style={{ color: '#00D4FF' }}>{log.batchId}</td>
-                      <td className="px-5 py-3 text-sm" style={{ color: 'var(--text-primary)' }}>{log.powderType}</td>
-                      <td className="px-5 py-3 text-xs hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{log.date}</td>
-                      <td className="px-5 py-3"><ResultBadge result={log.result} /></td>
-                      <td className="px-5 py-3 text-sm truncate max-w-[180px] hidden md:table-cell" style={{ color: 'var(--text-muted)' }}>{log.notes}</td>
-                      <td className="px-5 py-3 text-right">
-                        <div className="flex items-center justify-end">
-                          <motion.svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"
-                            style={{ color: 'var(--text-muted)' }} animate={{ rotate: expandedId === log.id ? 180 : 0 }}>
-                            <polyline points="6 9 12 15 18 9" />
-                          </motion.svg>
-                          {isAdmin && (
-                            <button
-                              onClick={(e) => { e.stopPropagation(); handleDelete(log.id); }}
-                              className="p-1 rounded-md text-red-500 hover:bg-red-500/10 transition-colors ml-2"
-                            >
-                              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 6h18"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </motion.tr>
-                    <AnimatePresence>
-                      {expandedId === log.id && (
-                        <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}>
-                          <td colSpan={6} className="px-5 pb-4 pt-1" style={{ background: 'var(--surface)', borderBottom: '1px solid var(--divider)' }}>
-                            <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-2">
-                              <div><p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Thickness (μm)</p><p className="text-sm font-mono font-medium" style={{ color: 'var(--text-primary)' }}>{log.thickness || 'N/A'}</p></div>
-                              <div><p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Cross-hatch Adhesion</p><p className="text-sm font-bold" style={{ color: log.adhesion === '5B' ? '#10B981' : '#FACC15' }}>{log.adhesion}</p></div>
-                              <div><p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Visual Inspection</p><p className="text-sm" style={{ color: log.visual === 'OK' ? '#10B981' : '#F43F5E' }}>{log.visual}</p></div>
-                              <div><p className="text-[10px] uppercase font-semibold mb-1" style={{ color: 'var(--text-muted)' }}>Inspector</p><p className="text-sm" style={{ color: 'var(--text-primary)' }}>{log.inspector}</p></div>
-                            </div>
-                          </td>
-                        </motion.tr>
-                      )}
-                    </AnimatePresence>
-                  </Fragment>
-                ))
-              )}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                <AnimatePresence>
+                  {filteredLogs.map(log => (
+                    <Fragment key={log.id}>
+                      <motion.tr initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
+                        className="group hover:bg-black/5 dark:hover:bg-white/5 cursor-pointer transition-colors"
+                        style={{ borderBottom: expandedId === log.id ? 'none' : '1px solid var(--divider)' }}
+                        onClick={() => setExpandedId(expandedId === log.id ? null : log.id)}>
+                        <td className="px-5 py-4 font-mono font-medium" style={{ color: 'var(--primary)' }}>{log.batch_id}</td>
+                        <td className="px-5 py-4 font-semibold" style={{ color: 'var(--text-primary)' }}>{log.powder_type}</td>
+                        <td className="px-5 py-4 hidden lg:table-cell" style={{ color: 'var(--text-muted)' }}>{log.inspector}</td>
+                        <td className="px-5 py-4 hidden sm:table-cell" style={{ color: 'var(--text-muted)' }}>{log.date}</td>
+                        <td className="px-5 py-4"><ResultBadge result={log.result} /></td>
+                        <td className="px-5 py-4 text-right">
+                          <button className="p-1 rounded-md hover:bg-black/10 dark:hover:bg-white/10 transition-colors pointer-events-auto" style={{ color: 'var(--text-muted)' }}>
+                            <svg className={`w-5 h-5 transition-transform ${expandedId === log.id ? 'rotate-180' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7" /></svg>
+                          </button>
+                        </td>
+                      </motion.tr>
+                      <AnimatePresence>
+                        {expandedId === log.id && (
+                          <motion.tr initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }} style={{ borderBottom: '1px solid var(--divider)' }}>
+                            <td colSpan={6} className="p-0">
+                              <div className="bg-black/5 dark:bg-white/5 border-t px-6 py-4" style={{ borderColor: 'var(--divider)' }}>
+                                <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-xs">
+                                  <div><span className="block mb-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Thickness</span><span style={{ color: 'var(--text-primary)' }} className="font-mono">{log.thickness} μm</span></div>
+                                  <div><span className="block mb-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Adhesion</span><span style={{ color: 'var(--text-primary)' }} className="font-mono">{log.adhesion}</span></div>
+                                  <div><span className="block mb-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Visual</span><span style={{ color: 'var(--text-primary)' }}>{log.visual}</span></div>
+                                  <div><span className="block mb-1 font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Notes</span><span style={{ color: 'var(--text-primary)' }}>{log.notes || '—'}</span></div>
+                                </div>
+                                {permissions.canDelete && (
+                                   <div className="mt-4 flex justify-end">
+                                        <button onClick={(e) => { e.stopPropagation(); handleDelete(log.id, log.batch_id); }} className="text-xs text-red-500 font-semibold uppercase hover:text-red-600 transition">Delete Record</button>
+                                   </div>
+                                )}
+                              </div>
+                            </td>
+                          </motion.tr>
+                        )}
+                      </AnimatePresence>
+                    </Fragment>
+                  ))}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          ) : (
+             <div className="p-16 text-center text-sm" style={{ color: 'var(--text-muted)' }}>No Quality Control reports exist yet.</div>
+          )}
         </div>
       </GlassCard>
 
-      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Log New Inspection" size="lg">
+      <Modal isOpen={isModalOpen} onClose={() => setIsModalOpen(false)} title="Log Quality Inspection">
         <div className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Batch ID *</label><input className="glass-input w-full" placeholder="B2026-0315" value={newLog.batchId} onChange={nf('batchId')} /></div>
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Powder Type</label><input className="glass-input w-full" placeholder="e.g. Matte Black" value={newLog.powderType} onChange={nf('powderType')} /></div>
+            <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Batch ID</label><input type="text" value={newLog.batch_id} onChange={e => setNewLog({ ...newLog, batch_id: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} /></div>
+            <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Powder Used</label><input type="text" value={newLog.powder_type} onChange={e => setNewLog({ ...newLog, powder_type: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} /></div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 border-y py-4 my-2" style={{ borderColor: 'var(--glass-border)' }}>
-            <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Thickness (μm)</label><input type="number" className="glass-input w-full font-mono" placeholder="60-80" value={newLog.thickness} onChange={nf('thickness')} /></div>
-            <div>
-              <label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Adhesion Check</label>
-              <select className="glass-input w-full" value={newLog.adhesion} onChange={nf('adhesion')}>
-                {['5B', '4B', '3B', '2B', '1B', '0B'].map(o => <option key={o} value={o}>{o}</option>)}
-              </select>
-            </div>
-            <div>
-              <label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Visual Check</label>
-              <select className="glass-input w-full" value={newLog.visual} onChange={nf('visual')}>
-                <option value="OK">OK (No defects)</option><option value="Orange Peel">Orange Peel</option><option value="Mottling">Mottling</option><option value="Pinholes">Pinholes</option>
-              </select>
-            </div>
+          <div className="grid grid-cols-3 gap-4">
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Thickness (μm)</label><input type="text" value={newLog.thickness} onChange={e => setNewLog({ ...newLog, thickness: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} /></div>
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Adhesion (ASTM)</label>
+               <select value={newLog.adhesion} onChange={e => setNewLog({ ...newLog, adhesion: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}>
+                 <option value="5B">5B (Best)</option><option value="4B">4B (Pass)</option><option value="3B">3B (Fail)</option><option value="0B">0B (Worst)</option>
+               </select>
+             </div>
+             <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Visual</label>
+               <select value={newLog.visual} onChange={e => setNewLog({ ...newLog, visual: e.target.value })} className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}>
+                 <option value="OK">OK / Smooth</option><option value="Pinholes">Pinholes</option><option value="Mottling">Mottling</option><option value="Orange Peel">Orange Peel</option>
+               </select>
+             </div>
           </div>
-          <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Inspector Name</label><input className="glass-input w-full" placeholder="Your name" value={newLog.inspector} onChange={nf('inspector')} /></div>
-          <div><label className="text-xs font-medium uppercase block mb-1.5" style={{ color: 'var(--text-muted)' }}>Additional Notes</label><textarea className="glass-input w-full min-h-[80px]" placeholder="Any special observations?" value={newLog.notes} onChange={nf('notes')} /></div>
-          <motion.button className="glass-btn-primary w-full justify-center p-3 mt-4" whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }} onClick={handleSave}>Submit QC Report</motion.button>
+          <div><label className="block text-xs font-semibold mb-1 uppercase" style={{ color: 'var(--text-muted)' }}>Inspector Notes</label><textarea value={newLog.notes} onChange={e => setNewLog({ ...newLog, notes: e.target.value })} rows="2" className="w-full border rounded-lg px-3 py-2 text-sm bg-transparent focus:outline-orange-500" style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }}></textarea></div>
+          <button disabled={processing} onClick={handleSave} className="w-full bg-orange-500 hover:bg-orange-600 text-white font-medium py-2.5 rounded-lg text-sm mt-2 transition-colors disabled:opacity-50">
+            {processing ? 'Saving...' : 'Submit Inspection Data'}
+          </button>
         </div>
       </Modal>
     </div>

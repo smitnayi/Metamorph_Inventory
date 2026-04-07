@@ -1,78 +1,146 @@
-import { motion } from 'framer-motion';
+import { useState } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { useAuth } from '../store/useStore';
+import { api } from '../services/api';
 
 export default function Login() {
   const { login } = useAuth();
+  const [isLogin, setIsLogin] = useState(true);
+  
+  const [formData, setFormData] = useState({ username: '', password: '', email: '', firstName: '', lastName: '' });
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleChange = (e) => setFormData(prev => ({ ...prev, [e.target.name]: e.target.value }));
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+      if (isLogin) {
+        if (!formData.username || !formData.password) throw new Error("Please enter all fields");
+        const res = await login(formData.username, formData.password);
+        if (!res.success) throw new Error(res.error || "Invalid credentials");
+      } else {
+        if (!formData.username || !formData.password || !formData.email) throw new Error("Please fill out required fields");
+        // Register Call
+        await api.register({
+            username: formData.username,
+            password: formData.password,
+            email: formData.email,
+            first_name: formData.firstName,
+            last_name: formData.lastName,
+            role: 'operator' // Defaults to operator for new signups
+        });
+        
+        // Auto login after register
+        const res = await login(formData.username, formData.password);
+        if (!res.success) throw new Error("Registration succeeded but auto-login failed.");
+      }
+    } catch (err) {
+      setError(err.message || "An error occurred");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
-    <div className="min-h-screen flex items-center justify-center relative p-6 w-full" style={{ background: 'var(--bg-primary)' }}>
-      {/* Background decoration */}
-      <div className="absolute inset-0 overflow-hidden pointer-events-none z-0">
-        <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-[#E8771A] rounded-full mix-blend-multiply filter blur-[128px] opacity-20"></div>
-        <div className="absolute bottom-1/4 right-1/4 w-[500px] h-[500px] bg-[#00D4FF] rounded-full mix-blend-multiply filter blur-[128px] opacity-10"></div>
+    <div className="min-h-screen flex items-center justify-center p-4 relative overflow-hidden" 
+         style={{ background: 'var(--bg-primary)' }}>
+         
+      {/* Animated Background Mesh */}
+      <div className="absolute inset-0 z-0 opacity-40">
+        <div className="absolute top-[-10%] left-[-10%] w-[50%] h-[50%] rounded-full bg-orange-600/30 blur-[120px]" />
+        <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-zinc-600/30 blur-[120px]" />
       </div>
 
       <motion.div 
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
+        initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, ease: "easeOut" }}
         className="w-full max-w-md relative z-10"
       >
-        <div className="glass-card p-10 text-center">
-          <div className="flex justify-center mb-6">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center font-bold text-xl"
-              style={{ background: 'linear-gradient(135deg, #E8771A, #C96410)', color: '#FFFFFF', boxShadow: '0 8px 32px rgba(232, 119, 26, 0.4)' }}>
-              MM
-            </div>
-          </div>
+        <div className="text-center mb-8">
+          <motion.img 
+             initial={{ scale: 0.8 }} animate={{ scale: 1 }} transition={{ delay: 0.2 }}
+             src="/logo.png" alt="Metamorph Logo" className="h-16 mx-auto mb-6" 
+          />
+          <h1 className="text-3xl font-bold tracking-tight mb-2" style={{ color: 'var(--text-primary)' }}>
+             {isLogin ? 'Welcome Back' : 'Create Account'}
+          </h1>
+          <p style={{ color: 'var(--text-muted)' }}>Sign in to continue to your dashboard</p>
+        </div>
+
+        <form onSubmit={handleSubmit} className="p-8 rounded-2xl border" 
+              style={{ background: 'var(--surface)', borderColor: 'var(--glass-border)', boxShadow: '0 25px 50px -12px rgba(0,0,0,0.25)' }}>
           
-          <h1 className="text-3xl font-heading font-bold mb-2" style={{ color: 'var(--text-primary)' }}>Metamorph</h1>
-          <p className="text-sm mb-10" style={{ color: 'var(--text-muted)' }}>Operations Dashboard Access</p>
+          <AnimatePresence mode="wait">
+            {error && (
+              <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: 'auto' }} exit={{ opacity: 0, height: 0 }}
+                          className="bg-red-500/10 border border-red-500/30 text-red-500 px-4 py-3 rounded-lg mb-6 text-sm font-medium">
+                {error}
+              </motion.div>
+            )}
+          </AnimatePresence>
 
           <div className="space-y-4">
-            <button
-              onClick={() => login('admin')}
-              className="w-full relative group overflow-hidden rounded-xl p-4 flex items-center justify-between transition-all"
-              style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
-            >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(90deg, rgba(232, 119, 26, 0.1) 0%, transparent 100%)' }}></div>
-              <div className="flex items-center gap-3 relative z-10">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(232, 119, 26, 0.15)', color: '#E8771A' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Admin Server</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Full system access & logs</p>
-                </div>
-              </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#E8771A' }} className="relative z-10 transform group-hover:translate-x-1 transition-transform"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
+            <div className="space-y-1.5">
+              <label className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Username</label>
+              <input type="text" name="username" value={formData.username} onChange={handleChange} required
+                     className="w-full bg-black/5 dark:bg-white/5 border px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm transition-colors"
+                     style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="johndoe" />
+            </div>
 
-            <button
-              onClick={() => login('operator')}
-              className="w-full relative group overflow-hidden rounded-xl p-4 flex items-center justify-between transition-all"
-              style={{ background: 'var(--surface)', border: '1px solid var(--glass-border)' }}
-            >
-              <div className="absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity" style={{ background: 'linear-gradient(90deg, rgba(0, 212, 255, 0.1) 0%, transparent 100%)' }}></div>
-              <div className="flex items-center gap-3 relative z-10">
-                <div className="w-10 h-10 rounded-lg flex items-center justify-center" style={{ background: 'rgba(0, 212, 255, 0.15)', color: '#00D4FF' }}>
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+            {!isLogin && (
+              <>
+                <div className="space-y-1.5">
+                  <label className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Email</label>
+                  <input type="email" name="email" value={formData.email} onChange={handleChange} required
+                         className="w-full bg-black/5 dark:bg-white/5 border px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm"
+                         style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="john@example.com" />
                 </div>
-                <div className="text-left">
-                  <p className="font-semibold text-sm" style={{ color: 'var(--text-primary)' }}>Operator Terminal</p>
-                  <p className="text-xs" style={{ color: 'var(--text-muted)' }}>Shop floor data entry only</p>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>First Name</label>
+                    <input type="text" name="firstName" value={formData.firstName} onChange={handleChange}
+                           className="w-full bg-black/5 dark:bg-white/5 border px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm"
+                           style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} />
+                  </div>
+                  <div className="space-y-1.5">
+                    <label className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Last Name</label>
+                    <input type="text" name="lastName" value={formData.lastName} onChange={handleChange}
+                           className="w-full bg-black/5 dark:bg-white/5 border px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm"
+                           style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} />
+                  </div>
                 </div>
+              </>
+            )}
+
+            <div className="space-y-1.5">
+              <div className="flex items-center justify-between">
+                <label className="text-sm font-semibold uppercase tracking-wider" style={{ color: 'var(--text-muted)' }}>Password</label>
               </div>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ color: '#00D4FF' }} className="relative z-10 transform group-hover:translate-x-1 transition-transform"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
-            </button>
+              <input type="password" name="password" value={formData.password} onChange={handleChange} required
+                     className="w-full bg-black/5 dark:bg-white/5 border px-4 py-3 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500 transition-all text-sm"
+                     style={{ borderColor: 'var(--divider)', color: 'var(--text-primary)' }} placeholder="••••••••" />
+            </div>
           </div>
 
-          <div className="mt-8 text-xs flex justify-center gap-2" style={{ color: 'var(--text-muted)' }}>
-            <span className="flex items-center gap-1">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-              Demo mode (No password required)
-            </span>
-          </div>
-        </div>
+          <motion.button 
+             whileHover={{ scale: 1.01 }} whileTap={{ scale: 0.98 }}
+             disabled={loading} type="submit"
+             className="w-full mt-8 bg-orange-600 hover:bg-orange-500 text-white font-bold py-3.5 px-4 rounded-xl transition-colors shadow-[0_0_20px_rgba(234,88,12,0.3)] disabled:opacity-50">
+             {loading ? <span className="animate-pulse">Authenticating...</span> : (isLogin ? 'Sign In' : 'Create Account')}
+          </motion.button>
+        </form>
+
+        <p className="text-center mt-8 text-sm" style={{ color: 'var(--text-muted)' }}>
+           {isLogin ? "Don't have an account? " : "Already have an account? "}
+           <button onClick={() => setIsLogin(!isLogin)} className="font-semibold text-orange-500 hover:text-orange-400 transition-colors">
+              {isLogin ? 'Register' : 'Log In'}
+           </button>
+        </p>
+
       </motion.div>
     </div>
   );

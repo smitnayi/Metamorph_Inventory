@@ -1,4 +1,20 @@
 /** @type {import('tailwindcss').Config} */
+import defaultTheme from "tailwindcss/defaultTheme";
+import colors from "tailwindcss/colors";
+import flattenColorPalette from "tailwindcss/lib/util/flattenColorPalette";
+
+// This plugin adds each Tailwind color as a global CSS variable, e.g. var(--gray-200).
+function addVariablesForColors({ addBase, theme }) {
+  let allColors = flattenColorPalette(theme("colors"));
+  let newVars = Object.fromEntries(
+    Object.entries(allColors).map(([key, val]) => [`--${key}`, val])
+  );
+
+  addBase({
+    ":root": newVars,
+  });
+}
+
 export default {
   content: [
     "./index.html",
@@ -42,39 +58,30 @@ export default {
         body: ['DM Sans', 'sans-serif'],
         mono: ['JetBrains Mono', 'monospace'],
       },
-      backdropBlur: {
-        glass: '20px',
-      },
       animation: {
         'shimmer': 'shimmer 2s infinite linear',
         'pulse-glow': 'pulseGlow 2s infinite ease-in-out',
-        'slide-in-right': 'slideInRight 0.3s ease-out',
-        'slide-in-top': 'slideInTop 0.3s ease-out',
-        'fade-up': 'fadeUp 0.4s ease-out',
+        'meteor-effect': "meteor 5s linear infinite",
       },
       keyframes: {
         shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
+          '0%': { transform: 'translateX(-100%)' },
+          '100%': { transform: 'translateX(100%)' },
         },
         pulseGlow: {
-          '0%, 100%': { opacity: 0.5 },
-          '50%': { opacity: 1 },
+          '0%, 100%': { opacity: 1, boxShadow: '0 0 10px rgba(245, 166, 35, 0.3)' },
+          '50%': { opacity: 0.6, boxShadow: '0 0 20px rgba(245, 166, 35, 0.1)' },
         },
-        slideInRight: {
-          '0%': { transform: 'translateX(100%)', opacity: 0 },
-          '100%': { transform: 'translateX(0)', opacity: 1 },
-        },
-        slideInTop: {
-          '0%': { transform: 'translateY(-20px)', opacity: 0 },
-          '100%': { transform: 'translateY(0)', opacity: 1 },
-        },
-        fadeUp: {
-          '0%': { transform: 'translateY(20px)', opacity: 0 },
-          '100%': { transform: 'translateY(0)', opacity: 1 },
+        meteor: {
+          "0%": { transform: "rotate(215deg) translateX(0)", opacity: "1" },
+          "70%": { opacity: "1" },
+          "100%": {
+            transform: "rotate(215deg) translateX(-500px)",
+            opacity: "0",
+          },
         },
       },
     },
   },
-  plugins: [],
+  plugins: [addVariablesForColors],
 }
