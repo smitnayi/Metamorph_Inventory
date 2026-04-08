@@ -7,9 +7,7 @@ services:
     startCommand: "gunicorn backend.wsgi:application"
     envVars:
       - key: DATABASE_URL
-        fromDatabase:
-          name: metamorph-db  # Or setup Supabase separately and use literal connection string
-          property: connectionString
+        sync: false  # Render will prompt you to paste your Supabase URL here when building the Blueprint!
       - key: SECRET_KEY
         generateValue: true
       - key: DEBUG

@@ -6,8 +6,12 @@ import os
 from pathlib import Path
 from datetime import timedelta
 import dj_database_url
+from dotenv import load_dotenv
 
 BASE_DIR = Path(__file__).resolve().parent.parent
+
+# Load environment variables from a .env file locally (ignored in production Render)
+load_dotenv(BASE_DIR / 'backend' / '.env')
 
 SECRET_KEY = os.environ.get('SECRET_KEY', 'django-insecure-l_1r+==05+%r)b_xl&&+and%s_&$sr7yzfutx^a6qbm--w&pd5')
 
@@ -50,6 +54,7 @@ MIDDLEWARE = [
 
 # ── CORS Configuration ──
 CORS_ALLOWED_ORIGINS = [
+    'https://metamorph-dashboard.onrender.com',
     'https://metamorph-react-dashboard.onrender.com',
     'http://localhost:5173',
     'http://localhost:5174',
