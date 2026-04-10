@@ -36,7 +36,21 @@ async function fetchApi(endpoint, options = {}) {
         const data = text ? JSON.parse(text) : {};
 
         if (!response.ok) {
-            throw new Error(data.detail || data.error || data.message || 'API Error');
+            // DRF validation errors look like {"username": ["A user with that username already exists."]}
+            let errorMessage = 'API Error';
+            if (data.detail) errorMessage = data.detail;
+            else if (data.error) errorMessage = data.error;
+            else if (data.message) errorMessage = data.message;
+            else if (typeof data === 'object' && Object.keys(data).length > 0) {
+                // Grab the first array string from field validation errors
+                const firstKey = Object.keys(data)[0];
+                if (Array.isArray(data[firstKey])) {
+                    errorMessage = data[firstKey][0];
+                } else if (typeof data[firstKey] === 'string') {
+                    errorMessage = data[firstKey];
+                }
+            }
+            throw new Error(errorMessage);
         }
 
         return data;
