@@ -20,12 +20,15 @@ async function fetchApi(endpoint, options = {}) {
         const response = await fetch(url, { ...options, headers });
         
         if (response.status === 401) {
-            localStorage.removeItem('mm_access_token');
-            // If they are on any page other than login, kick them to login
-            if (window.location.pathname !== '/login') {
-                window.location.href = '/login';
+            // If they are failing to login, don't say session expired, let it fall through to pass the actual error message
+            if (endpoint !== '/token/') {
+                localStorage.removeItem('mm_access_token');
+                // If they are on any page other than login, kick them to login
+                if (window.location.pathname !== '/login') {
+                    window.location.href = '/login';
+                }
+                throw new Error('Session expired. Please log in again.');
             }
-            throw new Error('Session expired');
         }
 
         // Handle empty responses
